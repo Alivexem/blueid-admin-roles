@@ -37,6 +37,7 @@ export default function ProgrammesPage() {
   const [programme, setProgramme] = useState(PROGRAMME_NAMES[0]);
   const [item, setItem] = useState("");
   const byProgramme = countBy(benefits, (item) => item.programme);
+  const readOnly = role === "super";
 
   return (
     <div className="space-y-6">
@@ -44,112 +45,120 @@ export default function ProgrammesPage() {
         <PageHeading
           kicker="Support"
           title="Programmes"
-          text="Every benefit is recorded against one Blue ID. One active allocation is kept for each programme on that number. A second registration under another name is a duplicate for an officer to review."
+          text={
+            readOnly
+              ? "Programme totals across the state. This desk can see that support exists. It cannot allocate, approve, or deliver it."
+              : "Every benefit is recorded against one Blue ID. One active allocation is kept for each programme on that number. A second registration under another name is a duplicate for an officer to review."
+          }
         />
       </div>
-      <Panel title="Record a benefit">
-        <form
-          className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            const person = people.find((entry) => entry.id === holder);
-            const issued = commitText(item);
-            if (!person || !issued) return;
-            addBenefit({
-              programme,
-              item: issued,
-              date: "14 Oct 2026",
-              name: person.name,
-              id: person.id,
-              lga: person.lga,
-            });
-            setItem("");
-            toast.success(`${issued} written against ${person.id}.`);
-          }}
-        >
-          <Field label="Blue ID">
-            <select
-              value={holder}
-              onChange={(event) => setHolder(event.target.value)}
-              className={fieldClass}
-            >
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name} · {person.id}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Programme">
-            <select
-              value={programme}
-              onChange={(event) => setProgramme(event.target.value)}
-              className={fieldClass}
-            >
-              {PROGRAMME_NAMES.map((name) => (
-                <option key={name}>{name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            label="Item issued"
-            error={requiredText(item, "Enter the item issued.")}
+      {readOnly ? null : (
+        <Panel title="Record a benefit">
+          <form
+            className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              const person = people.find((entry) => entry.id === holder);
+              const issued = commitText(item);
+              if (!person || !issued) return;
+              addBenefit({
+                programme,
+                item: issued,
+                date: "14 Oct 2026",
+                name: person.name,
+                id: person.id,
+                lga: person.lga,
+              });
+              setItem("");
+              toast.success(`${issued} written against ${person.id}.`);
+            }}
           >
-            <input
-              value={item}
-              onChange={(event) => setItem(tidyText(event.target.value))}
-              aria-invalid={Boolean(
-                requiredText(item, "Enter the item issued."),
-              )}
-              className={fieldClass}
-            />
-          </Field>
-          <button
-            type="submit"
-            disabled={!holder || !isFilledText(item)}
-            className={submitClass}
-          >
-            Write to the ID
-          </button>
-        </form>
-      </Panel>
+            <Field label="Blue ID">
+              <select
+                value={holder}
+                onChange={(event) => setHolder(event.target.value)}
+                className={fieldClass}
+              >
+                {people.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name} · {person.id}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Programme">
+              <select
+                value={programme}
+                onChange={(event) => setProgramme(event.target.value)}
+                className={fieldClass}
+              >
+                {PROGRAMME_NAMES.map((name) => (
+                  <option key={name}>{name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              label="Item issued"
+              error={requiredText(item, "Enter the item issued.")}
+            >
+              <input
+                value={item}
+                onChange={(event) => setItem(tidyText(event.target.value))}
+                aria-invalid={Boolean(
+                  requiredText(item, "Enter the item issued."),
+                )}
+                className={fieldClass}
+              />
+            </Field>
+            <button
+              type="submit"
+              disabled={!holder || !isFilledText(item)}
+              className={submitClass}
+            >
+              Write to the ID
+            </button>
+          </form>
+        </Panel>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {byProgramme.map((item) => (
           <StatCard key={item.name} label={item.name} value={item.value} />
         ))}
       </div>
-      <Panel>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-left text-sm">
-            <thead className="bg-stone text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-              <tr>
-                <th className="px-4 py-3 font-medium">Person</th>
-                <th className="px-4 py-3 font-medium">Blue ID</th>
-                <th className="px-4 py-3 font-medium">Programme</th>
-                <th className="px-4 py-3 font-medium">Item</th>
-                <th className="px-4 py-3 font-medium">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {benefits.map((benefit) => (
-                <tr
-                  key={`${benefit.id}-${benefit.programme}`}
-                  className="border-t border-line"
-                >
-                  <td className="px-4 py-3 text-navy">{benefit.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {benefit.id}
-                  </td>
-                  <td className="px-4 py-3">{benefit.programme}</td>
-                  <td className="px-4 py-3">{benefit.item}</td>
-                  <td className="px-4 py-3">{benefit.date}</td>
+      {readOnly ? null : (
+        <Panel>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="bg-stone text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Person</th>
+                  <th className="px-4 py-3 font-medium">Blue ID</th>
+                  <th className="px-4 py-3 font-medium">Programme</th>
+                  <th className="px-4 py-3 font-medium">Item</th>
+                  <th className="px-4 py-3 font-medium">Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+              </thead>
+              <tbody>
+                {benefits.map((benefit) => (
+                  <tr
+                    key={`${benefit.id}-${benefit.programme}`}
+                    className="border-t border-line"
+                  >
+                    <td className="px-4 py-3 text-navy">{benefit.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {benefit.id}
+                    </td>
+                    <td className="px-4 py-3">{benefit.programme}</td>
+                    <td className="px-4 py-3">{benefit.item}</td>
+                    <td className="px-4 py-3">{benefit.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

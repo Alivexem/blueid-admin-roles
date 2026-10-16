@@ -28,7 +28,11 @@ export default function MapPage() {
         <PageHeading
           kicker="Places"
           title="Fishing communities"
-          text="Select a community to see its fishermen, boats, engines, and facilities."
+          text={
+            role === "super"
+              ? "Registration counts and facilities. There is no local-government switcher. Names from the register are not on this desk."
+              : "Select a community to see its fishermen, boats, engines, and facilities."
+          }
         />
       </div>
       <div className="grid gap-3 lg:grid-cols-[1.3fr_0.7fr]">

@@ -120,6 +120,34 @@ export default function SettingsPage() {
           </button>
         </form>
       </Panel>
+      {role === "super" ? (
+        <Panel title="Sessions">
+          <ul>
+            {[
+              ["This browser", "Calabar", "Current"],
+              ["Field office desktop", "Calabar", "13 Oct 2026"],
+            ].map(([device, place, when]) => (
+              <li
+                key={device}
+                className="flex items-center justify-between border-t border-line px-5 py-3 text-sm first:border-t-0"
+              >
+                <span className="text-navy">
+                  {device}
+                  <span className="text-muted-foreground"> · {place}</span>
+                </span>
+                <span className="text-muted-foreground">{when}</span>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="m-5 h-10 border border-navy px-4 text-sm text-navy"
+            onClick={() => toast.success("Other sessions signed out.")}
+          >
+            Sign out everywhere else
+          </button>
+        </Panel>
+      ) : null}
     </div>
   );
 }

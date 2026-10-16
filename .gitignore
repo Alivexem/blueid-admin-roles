@@ -38,3 +38,6 @@ coverage/
 # Local concept note. Kept on disk, not in git.
 Concept note to Developer Blue ID.pdf
 concept-note.md
+
+# Role brief. Kept on disk, not in git.
+docs/SUPER_ADMIN_FRONTEND.txt

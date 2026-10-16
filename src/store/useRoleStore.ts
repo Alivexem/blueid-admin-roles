@@ -22,6 +22,7 @@ export const useRoleStore = create<RoleState>((set) => ({
     if (typeof window === "undefined") return;
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (
+      saved === "super" ||
       saved === "state" ||
       saved === "fisheries" ||
       saved === "lga" ||

@@ -7,8 +7,9 @@ import { useRouter } from "next/router";
 import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { DashboardSidebar } from "@/components/layout/dashboard-sidebar";
 import { navFor } from "@/lib/dashboard";
-import { findOfficerById } from "@/lib/officers";
+import { findOfficerById, hydrateAccountOverrides } from "@/lib/officers";
 import { useRoleStore } from "@/store/useRoleStore";
+import { useSessionStore } from "@/store/useSessionStore";
 
 const SESSION_KEY = "blueid-session";
 
@@ -21,10 +22,20 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
+    hydrateAccountOverrides();
     const saved = window.localStorage.getItem(SESSION_KEY);
     const officer = saved ? findOfficerById(saved) : undefined;
-    if (officer) {
+    if (officer && officer.status === "Active") {
       useRoleStore.setState({ role: officer.role });
+      useSessionStore.setState({
+        signedIn: true,
+        userId: officer.userId,
+        mustChangePassword: officer.mustChangePassword,
+      });
+      if (officer.mustChangePassword) {
+        router.replace("/change-password");
+        return;
+      }
       setAuthed(true);
     }
     setCollapsed(window.localStorage.getItem("blueid-sidebar") === "collapsed");

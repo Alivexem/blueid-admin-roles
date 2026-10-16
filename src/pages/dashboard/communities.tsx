@@ -17,7 +17,11 @@ export default function CommunitiesPage() {
         <PageHeading
           kicker="Places"
           title="Communities"
-          text="Landing sites, cold storage, and boat repair, beside the people registered there."
+          text={
+            role === "super"
+              ? "Landing sites, cold storage, and boat repair across all 18 local governments. This list is read only."
+              : "Landing sites, cold storage, and boat repair, beside the people registered there."
+          }
         />
       </div>
       <Panel>

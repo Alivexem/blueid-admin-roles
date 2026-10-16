@@ -1,5 +1,5 @@
 export type RoleId =
-  "state" | "fisheries" | "lga" | "enumerator" | "cooperative";
+  "super" | "state" | "fisheries" | "lga" | "enumerator" | "cooperative";
 
 export type RecordStatus =
   | "Active"
@@ -60,12 +60,32 @@ export type CommunityRecord = {
   boatRepair: boolean;
 };
 
+export const ROLE_RANK: Record<RoleId, number> = {
+  super: 100,
+  state: 90,
+  fisheries: 80,
+  lga: 60,
+  cooperative: 40,
+  enumerator: 20,
+};
+
+export function assignableRoles(role: RoleId) {
+  const rank = ROLE_RANK[role];
+  return ROLES.filter((item) => ROLE_RANK[item.id] < rank);
+}
+
 export const ROLES: {
   id: RoleId;
   label: string;
   officer: string;
   office: string;
 }[] = [
+  {
+    id: "super",
+    label: "Super Administrator",
+    officer: "Ada Effiom",
+    office: "Account administration",
+  },
   {
     id: "state",
     label: "State Administrator",
@@ -102,7 +122,12 @@ export const NAV: { href: string; label: string; roles: RoleId[] }[] = [
   {
     href: "/dashboard",
     label: "Overview",
-    roles: ["state", "fisheries", "lga", "enumerator", "cooperative"],
+    roles: ["super", "state", "fisheries", "lga", "enumerator", "cooperative"],
+  },
+  {
+    href: "/dashboard/operators",
+    label: "Operators",
+    roles: ["super"],
   },
   {
     href: "/dashboard/fishermen",
@@ -132,22 +157,22 @@ export const NAV: { href: string; label: string; roles: RoleId[] }[] = [
   {
     href: "/dashboard/programmes",
     label: "Programmes",
-    roles: ["state", "fisheries", "lga", "cooperative"],
+    roles: ["super", "state", "fisheries", "lga", "cooperative"],
   },
   {
     href: "/dashboard/communities",
     label: "Communities",
-    roles: ["state", "fisheries", "lga"],
+    roles: ["super", "state", "fisheries", "lga"],
   },
   {
     href: "/dashboard/map",
     label: "Map",
-    roles: ["state", "fisheries", "lga"],
+    roles: ["super", "state", "fisheries", "lga"],
   },
   {
     href: "/dashboard/cooperatives",
     label: "Cooperatives",
-    roles: ["state", "cooperative"],
+    roles: ["super", "state", "cooperative"],
   },
   {
     href: "/dashboard/reports",
@@ -157,17 +182,22 @@ export const NAV: { href: string; label: string; roles: RoleId[] }[] = [
   {
     href: "/dashboard/sync",
     label: "Field sync",
-    roles: ["state", "enumerator"],
+    roles: ["super", "state", "enumerator"],
+  },
+  {
+    href: "/dashboard/activity",
+    label: "Enumerator activity",
+    roles: ["super"],
   },
   {
     href: "/dashboard/audit",
     label: "Audit trail",
-    roles: ["state"],
+    roles: ["super", "state"],
   },
   {
     href: "/dashboard/settings",
     label: "Settings",
-    roles: ["state", "fisheries", "lga", "enumerator", "cooperative"],
+    roles: ["super", "state", "fisheries", "lga", "enumerator", "cooperative"],
   },
 ];
 
@@ -613,11 +643,15 @@ export function roleMeta(role: RoleId) {
 }
 
 export function navFor(role: RoleId) {
-  return NAV.filter((item) => item.roles.includes(role)).map((item) =>
-    role === "cooperative" && item.href === "/dashboard/fishermen"
-      ? { ...item, label: "Members" }
-      : item,
-  );
+  return NAV.filter((item) => item.roles.includes(role)).map((item) => {
+    if (role === "cooperative" && item.href === "/dashboard/fishermen") {
+      return { ...item, label: "Members" };
+    }
+    if (role === "super" && item.href === "/dashboard/sync") {
+      return { ...item, label: "Sync status" };
+    }
+    return item;
+  });
 }
 
 export function fishermenFor(role: RoleId, extra: Fisherman[] = []) {
@@ -637,7 +671,9 @@ export function fishermenFor(role: RoleId, extra: Fisherman[] = []) {
 export function communitiesFor(role: RoleId, extra: Fisherman[] = []) {
   const people = fishermenFor(role, extra);
   const names = new Set(people.map((item) => item.community));
-  if (role === "state" || role === "fisheries") return COMMUNITIES;
+  if (role === "super" || role === "state" || role === "fisheries") {
+    return COMMUNITIES;
+  }
   return COMMUNITIES.filter((item) => names.has(item.name));
 }
 
@@ -748,6 +784,30 @@ export type AuditEntry = {
   action: string;
   detail: string;
 };
+
+export const ENUMERATOR_ACTIVITY = [
+  {
+    name: "Grace Effiong",
+    lga: "Bakassi",
+    device: "Field tablet · Ikang",
+    lastSync: "14 Oct 2026, 09:14",
+    waiting: 1,
+  },
+  {
+    name: "Samuel Eyo",
+    lga: "Odukpani",
+    device: "Field tablet · Creek Town",
+    lastSync: "11 Oct 2026, 10:22",
+    waiting: 0,
+  },
+  {
+    name: "Mary Edet",
+    lga: "Akpabuyo",
+    device: "Field tablet · Esuk Mba",
+    lastSync: "10 Oct 2026, 17:41",
+    waiting: 2,
+  },
+] as const;
 
 export const AUDIT: AuditEntry[] = [
   {

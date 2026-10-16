@@ -21,6 +21,9 @@ export default function LoginPage() {
   const ready = useSessionStore((state) => state.ready);
   const hydrate = useSessionStore((state) => state.hydrate);
   const signIn = useSessionStore((state) => state.signIn);
+  const mustChangePassword = useSessionStore(
+    (state) => state.mustChangePassword,
+  );
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -30,8 +33,9 @@ export default function LoginPage() {
   }, [hydrate]);
 
   useEffect(() => {
-    if (ready && signedIn) router.replace("/dashboard");
-  }, [ready, signedIn, router]);
+    if (!ready || !signedIn) return;
+    router.replace(mustChangePassword ? "/change-password" : "/dashboard");
+  }, [ready, signedIn, mustChangePassword, router]);
 
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
@@ -65,8 +69,14 @@ export default function LoginPage() {
                   toast.error(message);
                   return;
                 }
-                toast.success("Signed in.");
-                router.push("/dashboard");
+                const changePassword =
+                  useSessionStore.getState().mustChangePassword;
+                toast.success(
+                  changePassword
+                    ? "Choose a new password before opening the desk."
+                    : "Signed in.",
+                );
+                router.push(changePassword ? "/change-password" : "/dashboard");
               }}
             >
               <label className="block text-sm text-navy">

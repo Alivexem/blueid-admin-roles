@@ -44,67 +44,73 @@ export default function CooperativesPage() {
               ? "Ikang Fishers Cooperative"
               : "Cooperatives on the register"
           }
-          text="Membership and the benefits already written against those members."
+          text={
+            role === "super"
+              ? "Membership of each cooperative. This desk can read it. It cannot register a cooperative or change its members."
+              : "Membership and the benefits already written against those members."
+          }
         />
       </div>
-      <Panel title="Register a cooperative">
-        <form
-          className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_auto] md:items-end"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            const cooperative = commitText(name);
-            const place = commitText(community);
-            if (
-              !isFilledText(cooperative) ||
-              requiredText(place, "Enter the community.")
-            )
-              return;
-            const title = place ? `${cooperative} · ${place}` : cooperative;
-            addCooperative(title);
-            setName("");
-            setCommunity("");
-            toast.success(`${title} added to the register.`);
-          }}
-        >
-          <Field
-            label="Name"
-            error={requiredText(name, "Enter the cooperative name.")}
+      {role === "super" ? null : (
+        <Panel title="Register a cooperative">
+          <form
+            className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_auto] md:items-end"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              const cooperative = commitText(name);
+              const place = commitText(community);
+              if (
+                !isFilledText(cooperative) ||
+                requiredText(place, "Enter the community.")
+              )
+                return;
+              const title = place ? `${cooperative} · ${place}` : cooperative;
+              addCooperative(title);
+              setName("");
+              setCommunity("");
+              toast.success(`${title} added to the register.`);
+            }}
           >
-            <input
-              value={name}
-              onChange={(event) => setName(tidyText(event.target.value))}
-              aria-invalid={Boolean(
-                requiredText(name, "Enter the cooperative name."),
-              )}
-              className={fieldClass}
-            />
-          </Field>
-          <Field
-            label="Community"
-            error={requiredText(community, "Enter the community.")}
-          >
-            <input
-              value={community}
-              onChange={(event) => setCommunity(tidyText(event.target.value))}
-              aria-invalid={Boolean(
-                requiredText(community, "Enter the community."),
-              )}
-              className={fieldClass}
-            />
-          </Field>
-          <button
-            type="submit"
-            disabled={
-              !isFilledText(name) ||
-              Boolean(requiredText(community, "Enter the community."))
-            }
-            className={submitClass}
-          >
-            Add cooperative
-          </button>
-        </form>
-      </Panel>
+            <Field
+              label="Name"
+              error={requiredText(name, "Enter the cooperative name.")}
+            >
+              <input
+                value={name}
+                onChange={(event) => setName(tidyText(event.target.value))}
+                aria-invalid={Boolean(
+                  requiredText(name, "Enter the cooperative name."),
+                )}
+                className={fieldClass}
+              />
+            </Field>
+            <Field
+              label="Community"
+              error={requiredText(community, "Enter the community.")}
+            >
+              <input
+                value={community}
+                onChange={(event) => setCommunity(tidyText(event.target.value))}
+                aria-invalid={Boolean(
+                  requiredText(community, "Enter the community."),
+                )}
+                className={fieldClass}
+              />
+            </Field>
+            <button
+              type="submit"
+              disabled={
+                !isFilledText(name) ||
+                Boolean(requiredText(community, "Enter the community."))
+              }
+              className={submitClass}
+            >
+              Add cooperative
+            </button>
+          </form>
+        </Panel>
+      )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {names.map((name) => {
           const members = people.filter((item) => item.cooperative === name);
@@ -116,7 +122,9 @@ export default function CooperativesPage() {
             <Panel key={name} title={name}>
               <div className="grid grid-cols-2 gap-3 p-4">
                 <StatCard label="Members" value={members.length} />
-                <StatCard label="Benefits" value={benefits} />
+                {role === "super" ? null : (
+                  <StatCard label="Benefits" value={benefits} />
+                )}
               </div>
               <ul className="border-t border-line">
                 {members.map((member) => (

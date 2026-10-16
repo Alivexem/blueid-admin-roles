@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Copy,
   FileSpreadsheet,
+  Activity,
   LayoutDashboard,
   LogOut,
   Map,
@@ -32,6 +33,8 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
   "/dashboard": LayoutDashboard,
+  "/dashboard/operators": Users,
+  "/dashboard/activity": Activity,
   "/dashboard/fishermen": Users,
   "/dashboard/register": UserPlus,
   "/dashboard/verify": BadgeCheck,

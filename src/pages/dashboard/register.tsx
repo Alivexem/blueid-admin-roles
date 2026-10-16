@@ -19,6 +19,7 @@ import {
   type Fisherman,
 } from "@/lib/dashboard";
 import {
+  commitText,
   isFilledText,
   isPhone,
   isYear,
@@ -26,6 +27,8 @@ import {
   ninMessage,
   phoneMessage,
   requiredText,
+  stripSpace,
+  tidyText,
   yearMessage,
   yearsMessage,
 } from "@/lib/validation";
@@ -65,8 +68,24 @@ export default function RegisterPage() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [issued, setIssued] = useState<Fisherman | null>(null);
 
-  const set = (key: keyof typeof EMPTY, value: string | boolean) =>
-    setForm((current) => ({ ...current, [key]: value }));
+  const set = (key: keyof typeof EMPTY, value: string | boolean) => {
+    const spaceless = new Set<keyof typeof EMPTY>([
+      "year",
+      "phone",
+      "nin",
+      "kinPhone",
+      "yearsFishing",
+      "horsepower",
+      "serial",
+    ]);
+    const next =
+      typeof value === "string"
+        ? spaceless.has(key)
+          ? stripSpace(value)
+          : tidyText(value)
+        : value;
+    setForm((current) => ({ ...current, [key]: next }));
+  };
   const canIssue =
     isFilledText(form.name) &&
     isYear(form.year) &&
@@ -133,39 +152,39 @@ export default function RegisterPage() {
               : nextBlueId(form.lga, people);
             const person: Fisherman = {
               id,
-              name: form.name.trim(),
+              name: commitText(form.name),
               sex: form.sex,
               year: Number(form.year),
-              phone: form.phone.trim(),
+              phone: stripSpace(form.phone),
               lga: form.lga,
-              community: form.community.trim(),
-              landing: form.landing.trim() || form.community.trim(),
+              community: commitText(form.community),
+              landing: commitText(form.landing) || commitText(form.community),
               type: form.type,
               water: form.water,
-              yearsFishing: Number(form.yearsFishing),
-              cooperative: form.cooperative.trim() || null,
+              yearsFishing: Number(stripSpace(form.yearsFishing)),
+              cooperative: commitText(form.cooperative) || null,
               status: "Pending Verification",
               enumerator: roleMeta(role).officer,
               synced: !form.offline,
-              nin: form.nin.trim() || undefined,
-              kin: form.kin.trim() || undefined,
-              kinPhone: form.kinPhone.trim() || undefined,
-              gear: form.gear.trim() || undefined,
-              safety: form.safety.trim() || undefined,
+              nin: stripSpace(form.nin) || undefined,
+              kin: commitText(form.kin) || undefined,
+              kinPhone: stripSpace(form.kinPhone) || undefined,
+              gear: commitText(form.gear) || undefined,
+              safety: commitText(form.safety) || undefined,
               eligible: "Pending review",
-              boats: form.boatName.trim()
+              boats: commitText(form.boatName)
                 ? [
                     {
-                      name: form.boatName.trim(),
+                      name: commitText(form.boatName),
                       registration: form.offline
                         ? "Temporary"
                         : `CRS-BT-${LGA_CODES[form.lga] ?? "CRS"}-NEW`,
-                      length: form.boatLength.trim() || "Not recorded",
-                      engine: form.engine.trim() || null,
-                      horsepower: form.horsepower.trim() || null,
-                      serial: form.serial.trim() || null,
-                      gear: form.gear.trim() || null,
-                      safety: form.safety.trim() || null,
+                      length: commitText(form.boatLength) || "Not recorded",
+                      engine: commitText(form.engine) || null,
+                      horsepower: stripSpace(form.horsepower) || null,
+                      serial: stripSpace(form.serial) || null,
+                      gear: commitText(form.gear) || null,
+                      safety: commitText(form.safety) || null,
                     },
                   ]
                 : [],
@@ -230,7 +249,7 @@ export default function RegisterPage() {
                 <input
                   type="file"
                   accept="image/*"
-                  className="block w-full text-sm text-navy file:mr-3 file:h-11 file:border-0 file:bg-stone file:px-3 file:text-sm file:text-navy"
+                  className="block w-full text-base text-navy file:mr-3 file:h-11 file:border-0 file:bg-stone file:px-3 file:text-base file:text-navy"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (!file) return;

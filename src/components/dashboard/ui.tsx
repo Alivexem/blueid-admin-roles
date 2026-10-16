@@ -103,7 +103,7 @@ export function YesNo({ value }: { value: boolean }) {
 }
 
 export const fieldClass =
-  "h-11 w-full rounded-[8px] border border-line bg-white px-3 text-sm text-navy outline-none focus:border-navy aria-invalid:border-[#8C2F2F]";
+  "h-11 w-full rounded-[8px] border border-line bg-white px-3 text-base text-navy outline-none focus:border-navy aria-invalid:border-[#8C2F2F]";
 
 export function PasswordInput({
   className,
@@ -116,6 +116,11 @@ export function PasswordInput({
         {...props}
         type={visible ? "text" : "password"}
         className={cn(fieldClass, "pr-11", className)}
+        onChange={(event) => {
+          const cleaned = event.target.value.replace(/\s+/g, "");
+          if (cleaned !== event.target.value) event.target.value = cleaned;
+          props.onChange?.(event);
+        }}
       />
       <button
         type="button"

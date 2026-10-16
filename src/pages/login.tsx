@@ -7,13 +7,13 @@ import { toast } from "sonner";
 
 import { PasswordInput, submitClass } from "@/components/dashboard/ui";
 import { OptimizedImage } from "@/components/ui/optimized-image";
-import { isFilledText, requiredText } from "@/lib/validation";
+import { isFilledText, requiredText, stripSpace } from "@/lib/validation";
 import { Logo } from "@/components/layout/logo";
 import { useSessionStore } from "@/store/useSessionStore";
 import { cn } from "@/lib/utils";
 
 const inputClass =
-  "mt-2 h-12 w-full rounded-[8px] border border-transparent bg-[#E8F2FC] px-4 text-sm text-navy outline-none focus:border-navy aria-invalid:border-[#8C2F2F]";
+  "mt-2 h-12 w-full rounded-[8px] border border-transparent bg-[#E8F2FC] px-4 text-base text-navy outline-none focus:border-navy aria-invalid:border-[#8C2F2F]";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 <input
                   value={userId}
                   onChange={(event) => {
-                    setUserId(event.target.value);
+                    setUserId(stripSpace(event.target.value));
                     setError("");
                   }}
                   autoComplete="username"
@@ -95,7 +95,7 @@ export default function LoginPage() {
                 <PasswordInput
                   value={password}
                   onChange={(event) => {
-                    setPassword(event.target.value);
+                    setPassword(stripSpace(event.target.value));
                     setError("");
                   }}
                   autoComplete="current-password"
@@ -150,6 +150,22 @@ export default function LoginPage() {
             <h2 className="mt-4 font-serif text-5xl leading-[1.05] tracking-[-0.03em] text-white">
               One register for every fisherman in Cross River.
             </h2>
+            <p className="mt-8 text-[11px] leading-relaxed text-white/70">
+              <a
+                href="https://commons.wikimedia.org/wiki/File:Fisherman_in_Canoe_Fishing.jpg"
+                className="underline decoration-white/30 underline-offset-2"
+              >
+                Fisherman in Canoe Fishing
+              </a>{" "}
+              by Obinna Akahara,{" "}
+              <a
+                href="https://creativecommons.org/licenses/by-sa/4.0/"
+                className="underline decoration-white/30 underline-offset-2"
+              >
+                CC BY-SA 4.0
+              </a>
+              . Cropped.
+            </p>
           </div>
         </div>
       </aside>

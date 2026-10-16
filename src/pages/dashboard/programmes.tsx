@@ -11,7 +11,12 @@ import {
   fieldClass,
   submitClass,
 } from "@/components/dashboard/ui";
-import { isFilledText, requiredText } from "@/lib/validation";
+import {
+  commitText,
+  isFilledText,
+  requiredText,
+  tidyText,
+} from "@/lib/validation";
 import {
   PROGRAMME_NAMES,
   benefitsFor,
@@ -39,7 +44,7 @@ export default function ProgrammesPage() {
         <PageHeading
           kicker="Support"
           title="Programmes"
-          text="Every benefit is written against one Blue ID, so the same support is not issued twice under another name."
+          text="Every benefit is recorded against one Blue ID. One active allocation is kept for each programme on that number. A second registration under another name is a duplicate for an officer to review."
         />
       </div>
       <Panel title="Record a benefit">
@@ -49,16 +54,16 @@ export default function ProgrammesPage() {
           onSubmit={(event) => {
             event.preventDefault();
             const person = people.find((entry) => entry.id === holder);
-            if (!person || !item.trim()) return;
+            const issued = commitText(item);
+            if (!person || !issued) return;
             addBenefit({
               programme,
-              item: item.trim(),
+              item: issued,
               date: "14 Oct 2026",
               name: person.name,
               id: person.id,
               lga: person.lga,
             });
-            const issued = item.trim();
             setItem("");
             toast.success(`${issued} written against ${person.id}.`);
           }}
@@ -93,7 +98,7 @@ export default function ProgrammesPage() {
           >
             <input
               value={item}
-              onChange={(event) => setItem(event.target.value)}
+              onChange={(event) => setItem(tidyText(event.target.value))}
               aria-invalid={Boolean(
                 requiredText(item, "Enter the item issued."),
               )}

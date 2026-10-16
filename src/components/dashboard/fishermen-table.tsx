@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { PageHeading, Panel, StatusBadge } from "@/components/dashboard/ui";
 import { fishermenFor, type Fisherman, type RoleId } from "@/lib/dashboard";
+import { tidyText } from "@/lib/validation";
 import { useDraftStore } from "@/store/useDraftStore";
 
 export function FishermenTable({ role }: { role: RoleId }) {
@@ -38,9 +39,9 @@ export function FishermenTable({ role }: { role: RoleId }) {
       </div>
       <input
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => setQuery(tidyText(event.target.value))}
         placeholder="Search the register"
-        className="h-11 w-full max-w-md rounded-[8px] border border-line bg-white px-3 text-sm text-navy outline-none focus:border-navy"
+        className="h-11 w-full max-w-md rounded-[8px] border border-line bg-white px-3 text-base text-navy outline-none focus:border-navy"
       />
       <div className="grid gap-3 xl:grid-cols-[1.3fr_0.7fr]">
         <Panel>

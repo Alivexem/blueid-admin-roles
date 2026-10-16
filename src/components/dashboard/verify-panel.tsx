@@ -10,7 +10,7 @@ import {
   submitClass,
 } from "@/components/dashboard/ui";
 import { findFisherman, fishermenFor, type RoleId } from "@/lib/dashboard";
-import { blueIdMessage, isBlueId } from "@/lib/validation";
+import { blueIdMessage, isBlueId, stripSpace } from "@/lib/validation";
 import { useDraftStore } from "@/store/useDraftStore";
 
 export function VerifyPanel({ role }: { role: RoleId }) {
@@ -35,7 +35,7 @@ export function VerifyPanel({ role }: { role: RoleId }) {
         onSubmit={(event) => {
           event.preventDefault();
           if (!isBlueId(value)) return;
-          const id = value.trim().toUpperCase();
+          const id = stripSpace(value).toUpperCase();
           setSubmitted(id);
           const match = findFisherman(id, extra);
           const allowed = match
@@ -49,10 +49,10 @@ export function VerifyPanel({ role }: { role: RoleId }) {
         <div className="flex-1">
           <input
             value={value}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={(event) => setValue(stripSpace(event.target.value))}
             aria-label="Blue ID"
             aria-invalid={Boolean(blueIdMessage(value))}
-            className="h-11 w-full rounded-[8px] border border-line bg-white px-3 text-sm text-navy uppercase outline-none focus:border-navy aria-invalid:border-[#8C2F2F]"
+            className="h-11 w-full rounded-[8px] border border-line bg-white px-3 text-base text-navy uppercase outline-none focus:border-navy aria-invalid:border-[#8C2F2F]"
           />
           {blueIdMessage(value) ? (
             <p className="mt-1.5 text-xs text-[#8C2F2F]">

@@ -15,9 +15,10 @@ export const OFFICERS: OfficerAccount[] = [
 ];
 
 export function findOfficer(userId: string, password: string) {
-  const id = userId.trim().toLowerCase();
+  const id = userId.replace(/\s+/g, "").toLowerCase();
+  const secret = password.replace(/\s+/g, "");
   return OFFICERS.find(
-    (officer) => officer.userId === id && officer.password === password,
+    (officer) => officer.userId === id && officer.password === secret,
   );
 }
 

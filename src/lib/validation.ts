@@ -1,3 +1,16 @@
+export function stripSpace(value: string) {
+  return value.replace(/\s+/g, "");
+}
+
+/** Drop a leading space and repeated spaces while a name is being typed. */
+export function tidyText(value: string) {
+  return value.replace(/^\s+/, "").replace(/[^\S\n]{2,}/g, " ");
+}
+
+export function commitText(value: string) {
+  return tidyText(value).trim();
+}
+
 export function requiredText(value: string, message: string, min = 2) {
   const text = value.trim();
   if (!text) return "";

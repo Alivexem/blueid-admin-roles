@@ -11,7 +11,12 @@ import {
   fieldClass,
   submitClass,
 } from "@/components/dashboard/ui";
-import { isFilledText, requiredText } from "@/lib/validation";
+import {
+  commitText,
+  isFilledText,
+  requiredText,
+  tidyText,
+} from "@/lib/validation";
 import { fishermenFor } from "@/lib/dashboard";
 import { useDraftStore } from "@/store/useDraftStore";
 import { useRoleStore } from "@/store/useRoleStore";
@@ -48,14 +53,14 @@ export default function CooperativesPage() {
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
+            const cooperative = commitText(name);
+            const place = commitText(community);
             if (
-              !isFilledText(name) ||
-              requiredText(community, "Enter the community.")
+              !isFilledText(cooperative) ||
+              requiredText(place, "Enter the community.")
             )
               return;
-            const title = community.trim()
-              ? `${name.trim()} · ${community.trim()}`
-              : name.trim();
+            const title = place ? `${cooperative} · ${place}` : cooperative;
             addCooperative(title);
             setName("");
             setCommunity("");
@@ -68,7 +73,7 @@ export default function CooperativesPage() {
           >
             <input
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => setName(tidyText(event.target.value))}
               aria-invalid={Boolean(
                 requiredText(name, "Enter the cooperative name."),
               )}
@@ -81,7 +86,7 @@ export default function CooperativesPage() {
           >
             <input
               value={community}
-              onChange={(event) => setCommunity(event.target.value)}
+              onChange={(event) => setCommunity(tidyText(event.target.value))}
               aria-invalid={Boolean(
                 requiredText(community, "Enter the community."),
               )}

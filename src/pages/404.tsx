@@ -1,7 +1,7 @@
 import Head from "next/head";
+import Link from "next/link";
 
 import { Container } from "@/components/ui/container";
-import { webUrl } from "@/lib/site";
 
 export default function NotFoundPage() {
   return (
@@ -17,12 +17,12 @@ export default function NotFoundPage() {
           <h1 className="mt-4 max-w-lg font-serif text-5xl tracking-[-0.03em] text-navy">
             This page is not part of the register.
           </h1>
-          <a
-            href={webUrl()}
+          <Link
+            href="/login"
             className="mt-8 inline-flex text-sm text-navy underline decoration-navy underline-offset-4"
           >
-            Return to Blue ID
-          </a>
+            Return to sign-in
+          </Link>
         </Container>
       </section>
     </>

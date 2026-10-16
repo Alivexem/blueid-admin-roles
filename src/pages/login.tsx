@@ -3,14 +3,12 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 import { PasswordInput, submitClass } from "@/components/dashboard/ui";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { isFilledText, requiredText } from "@/lib/validation";
 import { Logo } from "@/components/layout/logo";
-import { webUrl } from "@/lib/site";
 import { useSessionStore } from "@/store/useSessionStore";
 import { cn } from "@/lib/utils";
 
@@ -42,18 +40,10 @@ export default function LoginPage() {
       </Head>
 
       <section className="flex min-h-screen flex-col bg-white px-6 py-6 sm:px-10">
-        <a
-          href={webUrl()}
-          className="inline-flex w-fit items-center gap-2 rounded-[8px] text-sm text-navy"
-        >
-          <ArrowLeft className="size-4" />
-          Back
-        </a>
-
         <div className="flex flex-1 items-center justify-center py-10">
           <div className="w-full max-w-[420px]">
             <div className="flex justify-center">
-              <Logo href={webUrl()} />
+              <Logo href="/login" />
             </div>
             <h1 className="mt-8 text-center text-[1.65rem] font-medium tracking-[-0.02em] text-navy">
               Sign in to your desk
@@ -70,8 +60,7 @@ export default function LoginPage() {
                 if (!isFilledText(userId, 3) || password.length < 8) return;
                 const ok = signIn(userId, password);
                 if (!ok) {
-                  const message =
-                    "That user ID or password is not recognised.";
+                  const message = "That user ID or password is not recognised.";
                   setError(message);
                   toast.error(message);
                   return;
@@ -121,9 +110,7 @@ export default function LoginPage() {
                 ) : null}
               </div>
 
-              {error ? (
-                <p className="text-sm text-[#8C2F2F]">{error}</p>
-              ) : null}
+              {error ? <p className="text-sm text-[#8C2F2F]">{error}</p> : null}
 
               <button
                 type="submit"

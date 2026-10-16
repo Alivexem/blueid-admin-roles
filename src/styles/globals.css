@@ -1,0 +1,130 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0e2f66;
+  --ivory: #ffffff;
+  --ink: #0e2f66;
+  --navy: #0a4c9a;
+  --stone: #e8f2fc;
+  --gold: #ffffff;
+  --gold-deep: #0a4c9a;
+  --lagoon: #0a4c9a;
+  --line: #d4e3f5;
+  --radius: 8px;
+  --card: #ffffff;
+  --card-foreground: #0e2f66;
+  --popover: #ffffff;
+  --popover-foreground: #0e2f66;
+  --primary: #0a4c9a;
+  --primary-foreground: #ffffff;
+  --secondary: #e8f2fc;
+  --secondary-foreground: #0e2f66;
+  --muted: #f4f8fd;
+  --muted-foreground: #4e6484;
+  --accent: #e8f2fc;
+  --accent-foreground: #0e2f66;
+  --destructive: #8c2f2f;
+  --border: #d4e3f5;
+  --input: #d4e3f5;
+  --ring: #0a4c9a;
+  --heading: #0a4c9a;
+  --font-sans: var(--font-nata-sans), system-ui, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ivory: var(--ivory);
+  --color-ink: var(--ink);
+  --color-navy: var(--navy);
+  --color-stone: var(--stone);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-lagoon: var(--lagoon);
+  --color-line: var(--line);
+  --color-heading: var(--heading);
+  --font-sans: var(--font-nata-sans), system-ui, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: 8px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+  }
+
+  html.lenis,
+  html.lenis-smooth {
+    scroll-behavior: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  body {
+    @apply bg-ivory font-sans text-foreground antialiased;
+  }
+
+  button {
+    border-radius: 8px;
+  }
+
+  ::selection {
+    background: #0a4c9a;
+    color: #ffffff;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #0a4c9a transparent;
+}
+
+[data-sonner-toast].blueid-toast {
+  border-radius: 8px;
+  border-left: 4px solid #0a4c9a !important;
+}
+
+@media print {
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+  }
+}

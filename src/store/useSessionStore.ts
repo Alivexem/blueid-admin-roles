@@ -1,0 +1,44 @@
+import { create } from "zustand";
+
+import { findOfficer, findOfficerById } from "@/lib/officers";
+import { useRoleStore } from "@/store/useRoleStore";
+
+const SESSION_KEY = "blueid-session";
+
+type SessionState = {
+  signedIn: boolean;
+  ready: boolean;
+  userId: string | null;
+  hydrate: () => void;
+  signIn: (userId: string, password: string) => boolean;
+  signOut: () => void;
+};
+
+export const useSessionStore = create<SessionState>((set) => ({
+  signedIn: false,
+  ready: false,
+  userId: null,
+  hydrate: () => {
+    const saved = window.localStorage.getItem(SESSION_KEY);
+    const officer = saved ? findOfficerById(saved) : undefined;
+    if (officer) {
+      useRoleStore.getState().setRole(officer.role);
+      set({ signedIn: true, ready: true, userId: officer.userId });
+      return;
+    }
+    window.localStorage.removeItem(SESSION_KEY);
+    set({ signedIn: false, ready: true, userId: null });
+  },
+  signIn: (userId, password) => {
+    const officer = findOfficer(userId, password);
+    if (!officer) return false;
+    window.localStorage.setItem(SESSION_KEY, officer.userId);
+    useRoleStore.getState().setRole(officer.role);
+    set({ signedIn: true, ready: true, userId: officer.userId });
+    return true;
+  },
+  signOut: () => {
+    window.localStorage.removeItem(SESSION_KEY);
+    set({ signedIn: false, userId: null });
+  },
+}));

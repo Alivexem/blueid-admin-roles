@@ -39,9 +39,5 @@ coverage/
 Concept note to Developer Blue ID.pdf
 concept-note.md
 
-# Role brief. Kept on disk, not in git.
-docs/SUPER_ADMIN_FRONTEND.txt
-
-# Integration notes. Working credentials. Not for git.
-docs/FRONTEND_GUIDE.md
-docs/FRONTEND_GUIDE*.md
+# Local guides and the API spec. Kept on disk, not in git.
+docs/

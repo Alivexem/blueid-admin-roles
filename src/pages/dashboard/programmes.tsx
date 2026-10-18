@@ -1,43 +1,89 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
+  EmptyState,
   Field,
+  Modal,
   PageHeading,
   Panel,
   StatCard,
+  StatSkeleton,
+  TableSkeleton,
   fieldClass,
   submitClass,
 } from "@/components/dashboard/ui";
 import {
-  commitText,
-  isFilledText,
-  requiredText,
-  tidyText,
-} from "@/lib/validation";
-import {
-  PROGRAMME_NAMES,
-  benefitsFor,
-  countBy,
-  fishermenFor,
-} from "@/lib/dashboard";
-import { useDraftStore } from "@/store/useDraftStore";
-import { useRoleStore } from "@/store/useRoleStore";
+  PROGRAMME_TYPES,
+  allocateBenefit,
+  createProgramme,
+  describeError,
+  listEligible,
+  listFishermen,
+  listProgrammes,
+  setProgrammeStatus,
+  type ProgrammeRow,
+} from "@/lib/api";
+import { stripSpace, tidyText } from "@/lib/validation";
+import { useSessionStore } from "@/store/useSessionStore";
+
+function title(value?: string) {
+  if (!value) return "—";
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default function ProgrammesPage() {
-  const role = useRoleStore((state) => state.role);
-  const extra = useDraftStore((state) => state.people);
-  const draftBenefits = useDraftStore((state) => state.benefits);
-  const addBenefit = useDraftStore((state) => state.addBenefit);
-  const people = fishermenFor(role, extra);
-  const benefits = [...draftBenefits, ...benefitsFor(role, extra)];
-  const [holder, setHolder] = useState(people[0]?.id ?? "");
-  const [programme, setProgramme] = useState(PROGRAMME_NAMES[0]);
-  const [item, setItem] = useState("");
-  const byProgramme = countBy(benefits, (item) => item.programme);
-  const readOnly = role === "super";
+  const granted = useSessionStore(
+    (state) => state.profile?.permissions?.granted,
+  );
+  const canAllocate = granted?.includes("benefit:allocate") ?? false;
+  const canManage = granted?.includes("programme:manage") ?? false;
+  const [rows, setRows] = useState<ProgrammeRow[]>([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [allocating, setAllocating] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [programmeId, setProgrammeId] = useState("");
+  const [blueId, setBlueId] = useState("");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [kind, setKind] = useState<(typeof PROGRAMME_TYPES)[number]>("GRANT");
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [busy, setBusy] = useState(false);
+  const [eligible, setEligible] = useState<string[]>([]);
+  const [eligibleFor, setEligibleFor] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    void listProgrammes()
+      .then((data) => {
+        if (live) setRows(data);
+      })
+      .catch((reason) => {
+        if (live) setError(describeError(reason));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const allocated = rows.reduce(
+    (sum, row) => sum + (row.allocatedCount ?? 0),
+    0,
+  );
+  const delivered = rows.reduce(
+    (sum, row) => sum + (row.deliveredCount ?? 0),
+    0,
+  );
 
   return (
     <div className="space-y-6">
@@ -45,120 +91,310 @@ export default function ProgrammesPage() {
         <PageHeading
           kicker="Support"
           title="Programmes"
-          text={
-            readOnly
-              ? "Programme totals across the state. This desk can see that support exists. It cannot allocate, approve, or deliver it."
-              : "Every benefit is recorded against one Blue ID. One active allocation is kept for each programme on that number. A second registration under another name is a duplicate for an officer to review."
-          }
+          text="Interventions on the register. One person holds one live allocation for each programme."
         />
+        <div className="flex flex-wrap gap-2">
+          {canManage ? (
+            <button
+              type="button"
+              className={submitClass}
+              onClick={() => setCreating(true)}
+            >
+              New programme
+            </button>
+          ) : null}
+          {canAllocate ? (
+            <button
+              type="button"
+              className="h-11 border border-navy px-5 text-sm text-navy"
+              onClick={() => setAllocating(true)}
+            >
+              Record an allocation
+            </button>
+          ) : null}
+        </div>
       </div>
-      {readOnly ? null : (
-        <Panel title="Record a benefit">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {loading ? (
+          Array.from({ length: 3 }, (_, index) => <StatSkeleton key={index} />)
+        ) : (
+          <>
+            <StatCard label="Programmes" value={rows.length} />
+            <StatCard label="Allocated" value={allocated} />
+            <StatCard label="Delivered" value={delivered} />
+          </>
+        )}
+      </div>
+      {creating ? (
+        <Modal title="New programme" onClose={() => setCreating(false)}>
           <form
-            className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end"
-            noValidate
+            className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              const person = people.find((entry) => entry.id === holder);
-              const issued = commitText(item);
-              if (!person || !issued) return;
-              addBenefit({
-                programme,
-                item: issued,
-                date: "14 Oct 2026",
-                name: person.name,
-                id: person.id,
-                lga: person.lga,
-              });
-              setItem("");
-              toast.success(`${issued} written against ${person.id}.`);
+              const parsedYear = Number(year);
+              if (
+                tidyText(name).length < 2 ||
+                code.trim().length < 2 ||
+                !parsedYear ||
+                busy
+              ) {
+                return;
+              }
+              setBusy(true);
+              void createProgramme({
+                name: tidyText(name),
+                code: stripSpace(code).toUpperCase(),
+                type: kind,
+                year: parsedYear,
+              })
+                .then(() => listProgrammes())
+                .then((data) => {
+                  setRows(data);
+                  setName("");
+                  setCode("");
+                  setCreating(false);
+                  toast.success("Programme created.");
+                })
+                .catch((reason) => toast.error(describeError(reason)))
+                .finally(() => setBusy(false));
             }}
           >
-            <Field label="Blue ID">
+            <Field label="Name">
+              <input
+                value={name}
+                onChange={(event) => setName(tidyText(event.target.value))}
+                className={fieldClass}
+              />
+            </Field>
+            <Field label="Code">
+              <input
+                value={code}
+                onChange={(event) => setCode(stripSpace(event.target.value))}
+                className={fieldClass}
+              />
+            </Field>
+            <Field label="Type">
               <select
-                value={holder}
-                onChange={(event) => setHolder(event.target.value)}
+                value={kind}
+                onChange={(event) =>
+                  setKind(
+                    event.target.value as (typeof PROGRAMME_TYPES)[number],
+                  )
+                }
                 className={fieldClass}
               >
-                {people.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name} · {person.id}
+                {PROGRAMME_TYPES.map((item) => (
+                  <option key={item} value={item}>
+                    {title(item)}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Programme">
-              <select
-                value={programme}
-                onChange={(event) => setProgramme(event.target.value)}
-                className={fieldClass}
-              >
-                {PROGRAMME_NAMES.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-            </Field>
-            <Field
-              label="Item issued"
-              error={requiredText(item, "Enter the item issued.")}
-            >
+            <Field label="Year">
               <input
-                value={item}
-                onChange={(event) => setItem(tidyText(event.target.value))}
-                aria-invalid={Boolean(
-                  requiredText(item, "Enter the item issued."),
-                )}
+                inputMode="numeric"
+                value={year}
+                onChange={(event) => setYear(stripSpace(event.target.value))}
                 className={fieldClass}
               />
             </Field>
             <button
               type="submit"
-              disabled={!holder || !isFilledText(item)}
+              disabled={
+                busy || tidyText(name).length < 2 || code.trim().length < 2
+              }
               className={submitClass}
             >
-              Write to the ID
+              Create programme
             </button>
           </form>
-        </Panel>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {byProgramme.map((item) => (
-          <StatCard key={item.name} label={item.name} value={item.value} />
-        ))}
-      </div>
-      {readOnly ? null : (
-        <Panel>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-left text-sm">
-              <thead className="bg-stone text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Person</th>
-                  <th className="px-4 py-3 font-medium">Blue ID</th>
-                  <th className="px-4 py-3 font-medium">Programme</th>
-                  <th className="px-4 py-3 font-medium">Item</th>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {benefits.map((benefit) => (
-                  <tr
-                    key={`${benefit.id}-${benefit.programme}`}
-                    className="border-t border-line"
-                  >
-                    <td className="px-4 py-3 text-navy">{benefit.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {benefit.id}
-                    </td>
-                    <td className="px-4 py-3">{benefit.programme}</td>
-                    <td className="px-4 py-3">{benefit.item}</td>
-                    <td className="px-4 py-3">{benefit.date}</td>
-                  </tr>
+        </Modal>
+      ) : null}
+      {allocating ? (
+        <Modal
+          title="Record an allocation"
+          onClose={() => setAllocating(false)}
+        >
+          <form
+            className="grid gap-4 md:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!programmeId || blueId.trim().length < 4 || busy) return;
+              setBusy(true);
+              void listFishermen({ search: blueId.trim() })
+                .then((result) => {
+                  const person = result.data.find(
+                    (item) =>
+                      item.blueId?.toLowerCase() ===
+                      blueId.trim().toLowerCase(),
+                  );
+                  if (!person) {
+                    toast.error("No verified fisherman has that Blue ID.");
+                    return;
+                  }
+                  return allocateBenefit(programmeId, {
+                    fisherman: person.id,
+                  }).then(() => {
+                    setBlueId("");
+                    setAllocating(false);
+                    toast.success("Allocation recorded.");
+                  });
+                })
+                .catch((reason) => toast.error(describeError(reason)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <Field label="Programme">
+              <select
+                value={programmeId}
+                onChange={(event) => setProgrammeId(event.target.value)}
+                className={fieldClass}
+              >
+                <option value="">Choose a programme</option>
+                {rows.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      )}
+              </select>
+            </Field>
+            <Field label="Blue ID">
+              <input
+                value={blueId}
+                onChange={(event) => setBlueId(event.target.value)}
+                className={fieldClass}
+              />
+            </Field>
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={busy || !programmeId || blueId.trim().length < 4}
+                className={submitClass}
+              >
+                Allocate
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+      <Panel>
+        {error ? (
+          <p className="px-5 py-4 text-sm text-[#8C2F2F]">{error}</p>
+        ) : null}
+        {loading ? <TableSkeleton rows={6} columns={5} /> : null}
+        <div className={loading ? "hidden" : "overflow-x-auto"}>
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-stone text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+              <tr>
+                <th className="px-4 py-3 font-medium">Programme</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Allocated</th>
+                <th className="px-4 py-3 font-medium">Delivered</th>
+                <th className="px-4 py-3 font-medium">Remaining</th>
+                <th className="px-4 py-3 font-medium"> </th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading && rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      title="No programmes yet"
+                      text="Interventions created for the state will be listed here."
+                    />
+                  </td>
+                </tr>
+              ) : null}
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t border-line">
+                  <td className="px-4 py-3">
+                    <p className="text-navy">{row.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {title(row.type)}
+                      {row.year ? ` · ${row.year}` : ""}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-navy">{title(row.status)}</td>
+                  <td className="px-4 py-3">{row.allocatedCount ?? 0}</td>
+                  <td className="px-4 py-3">{row.deliveredCount ?? 0}</td>
+                  <td className="px-4 py-3">{row.remainingSlots ?? "—"}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-2">
+                      {canAllocate ? (
+                        <button
+                          type="button"
+                          className="h-9 border border-navy px-3 text-sm text-navy"
+                          onClick={() => {
+                            setEligibleFor(row.name);
+                            void listEligible(row.id)
+                              .then((people) =>
+                                setEligible(
+                                  people.map(
+                                    (person) =>
+                                      person.fullName ||
+                                      person.blueId ||
+                                      person.id,
+                                  ),
+                                ),
+                              )
+                              .catch((reason) =>
+                                toast.error(describeError(reason)),
+                              );
+                          }}
+                        >
+                          Eligible
+                        </button>
+                      ) : null}
+                      {canManage ? (
+                        <select
+                          value={row.status || "DRAFT"}
+                          className="h-9 rounded-[8px] border border-line px-2 text-sm text-navy"
+                          onChange={(event) => {
+                            const status = event.target.value as
+                              "DRAFT" | "OPEN" | "CLOSED" | "ARCHIVED";
+                            void setProgrammeStatus(row.id, status)
+                              .then(() => listProgrammes())
+                              .then(setRows)
+                              .then(() =>
+                                toast.success("Programme status updated."),
+                              )
+                              .catch((reason) =>
+                                toast.error(describeError(reason)),
+                              );
+                          }}
+                        >
+                          <option value="DRAFT">Draft</option>
+                          <option value="OPEN">Open</option>
+                          <option value="CLOSED">Closed</option>
+                          <option value="ARCHIVED">Archived</option>
+                        </select>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      {eligibleFor ? (
+        <Modal
+          title={`Eligible · ${eligibleFor}`}
+          onClose={() => setEligibleFor("")}
+        >
+          {eligible.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No one is pre-screened for this programme.
+            </p>
+          ) : (
+            <ul className="space-y-2 text-sm text-navy">
+              {eligible.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+      ) : null}
     </div>
   );
 }

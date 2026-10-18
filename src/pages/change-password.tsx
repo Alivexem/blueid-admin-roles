@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { PasswordInput, submitClass } from "@/components/dashboard/ui";
 import { Logo } from "@/components/layout/logo";
-import { findOfficerById, saveAccountOverride } from "@/lib/officers";
+import { changePassword, describeError, detailMessages } from "@/lib/api";
 import { stripSpace } from "@/lib/validation";
 import { useSessionStore } from "@/store/useSessionStore";
 import { cn } from "@/lib/utils";
@@ -22,13 +22,13 @@ export default function ChangePasswordPage() {
   const mustChangePassword = useSessionStore(
     (state) => state.mustChangePassword,
   );
-  const userId = useSessionStore((state) => state.userId);
   const hydrate = useSessionStore((state) => state.hydrate);
-  const signOut = useSessionStore((state) => state.signOut);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [reasons, setReasons] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     hydrate();
@@ -42,9 +42,10 @@ export default function ChangePasswordPage() {
 
   const readyToSave =
     current.length > 0 &&
-    next.length >= 8 &&
+    next.length >= 12 &&
     next === confirm &&
-    next !== current;
+    next !== current &&
+    !busy;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-white px-6 py-10">
@@ -68,23 +69,27 @@ export default function ChangePasswordPage() {
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            if (!readyToSave || !userId) return;
-            const officer = findOfficerById(userId);
-            if (!officer || officer.password !== current) {
-              const message = "The issued password is not correct.";
-              setError(message);
-              toast.error(message);
-              return;
-            }
-            officer.password = next;
-            officer.mustChangePassword = false;
-            saveAccountOverride(userId, {
-              password: next,
-              mustChangePassword: false,
-            });
-            signOut();
-            toast.success("Password saved. Sign in with the new one.");
-            router.push("/login");
+            if (!readyToSave) return;
+            setBusy(true);
+            void changePassword(current, next)
+              .then(() => {
+                useSessionStore.setState({
+                  signedIn: false,
+                  userId: null,
+                  profile: null,
+                  mustChangePassword: false,
+                });
+                toast.success("Password saved. Sign in with the new one.");
+                router.push("/login");
+              })
+              .catch((reason) => {
+                const messages = detailMessages(reason);
+                setReasons(messages);
+                const message = describeError(reason);
+                setError(message);
+                toast.error(message);
+              })
+              .finally(() => setBusy(false));
           }}
         >
           <label className="block text-sm text-navy">
@@ -94,6 +99,7 @@ export default function ChangePasswordPage() {
               onChange={(event) => {
                 setCurrent(stripSpace(event.target.value));
                 setError("");
+                setReasons([]);
               }}
               autoComplete="current-password"
               className={cn(inputClass, "pr-11")}
@@ -123,20 +129,30 @@ export default function ChangePasswordPage() {
               className={cn(inputClass, "pr-11")}
             />
           </label>
-          {next.length > 0 && next.length < 8 ? (
-            <p className="text-sm text-[#8C2F2F]">Use at least 8 characters.</p>
+          {next.length > 0 && next.length < 12 ? (
+            <p className="text-sm text-[#8C2F2F]">
+              Use at least 12 characters.
+            </p>
           ) : null}
           {confirm.length > 0 && next !== confirm ? (
             <p className="text-sm text-[#8C2F2F]">
               The new passwords do not match.
             </p>
           ) : null}
-          {next.length >= 8 && next === current ? (
+          {next.length >= 12 && next === current ? (
             <p className="text-sm text-[#8C2F2F]">
               Choose a password different from the one you were issued.
             </p>
           ) : null}
-          {error ? <p className="text-sm text-[#8C2F2F]">{error}</p> : null}
+          {reasons.length ? (
+            <ul className="space-y-1 text-sm text-[#8C2F2F]">
+              {reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          ) : error ? (
+            <p className="text-sm text-[#8C2F2F]">{error}</p>
+          ) : null}
           <button
             type="submit"
             disabled={!readyToSave}

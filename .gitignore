@@ -41,3 +41,7 @@ concept-note.md
 
 # Role brief. Kept on disk, not in git.
 docs/SUPER_ADMIN_FRONTEND.txt
+
+# Integration notes. Working credentials. Not for git.
+docs/FRONTEND_GUIDE.md
+docs/FRONTEND_GUIDE*.md

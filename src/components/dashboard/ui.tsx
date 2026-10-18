@@ -1,7 +1,11 @@
-import { useState, type ComponentProps, type ReactNode } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import {
+  useEffect,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
+import { Eye, EyeOff, X } from "lucide-react";
 
-import type { RecordStatus } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
 
 export function PageHeading({
@@ -75,30 +79,45 @@ export function Panel({
   );
 }
 
-export function StatusBadge({ status }: { status: RecordStatus }) {
+export function Skeleton({ className }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        "inline-flex rounded-[8px] px-2 py-0.5 text-[11px] tracking-wide whitespace-nowrap",
-        status === "Active" && "bg-navy text-white",
-        status === "Pending Verification" && "border border-navy text-navy",
-        status === "Suspended" && "bg-[#F8E8E8] text-[#8C2F2F]",
-        status === "Deceased" && "bg-stone text-navy",
-        status === "Inactive" && "bg-stone text-muted-foreground",
-        status === "Duplicate Record Under Review" &&
-          "border border-dashed border-navy text-navy",
-      )}
-    >
-      {status}
-    </span>
+    <div
+      className={cn("animate-pulse rounded-[8px] bg-stone", className)}
+      aria-hidden
+    />
   );
 }
 
-export function YesNo({ value }: { value: boolean }) {
+export function StatSkeleton() {
   return (
-    <span className={value ? "text-navy" : "text-muted-foreground"}>
-      {value ? "Yes" : "No"}
-    </span>
+    <article className="rounded-[8px] border border-line bg-white px-5 py-4">
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="mt-3 h-8 w-16" />
+    </article>
+  );
+}
+
+export function TableSkeleton({
+  rows = 6,
+  columns = 4,
+}: {
+  rows?: number;
+  columns?: number;
+}) {
+  return (
+    <div className="space-y-4 p-5" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }, (_, row) => (
+        <div
+          key={row}
+          className="grid gap-3"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
+          {Array.from({ length: columns }, (_, column) => (
+            <Skeleton key={column} className="h-4" />
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -136,6 +155,67 @@ export function PasswordInput({
 
 export const submitClass =
   "h-11 bg-navy px-5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40";
+
+export function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="px-5 py-12 text-center">
+      <p className="font-serif text-2xl tracking-[-0.03em] text-navy">
+        {title}
+      </p>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+        {text}
+      </p>
+    </div>
+  );
+}
+
+export function Modal({
+  title,
+  onClose,
+  children,
+  wide,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  wide?: boolean;
+}) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy/40 p-4 sm:items-center">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={
+          wide
+            ? "my-6 w-full max-w-3xl rounded-[8px] border border-line bg-white"
+            : "my-6 w-full max-w-xl rounded-[8px] border border-line bg-white"
+        }
+      >
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 className="text-sm font-medium text-navy">{title}</h2>
+          <button
+            type="button"
+            className="grid size-8 place-items-center text-navy"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 export function Field({
   label,

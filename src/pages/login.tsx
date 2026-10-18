@@ -5,7 +5,13 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { toast } from "sonner";
 
-import { PasswordInput, submitClass } from "@/components/dashboard/ui";
+import {
+  Field,
+  Modal,
+  PasswordInput,
+  submitClass,
+} from "@/components/dashboard/ui";
+import { describeError, forgotPassword } from "@/lib/api";
 import { OptimizedImage } from "@/components/ui/optimized-image";
 import { isFilledText, requiredText, stripSpace } from "@/lib/validation";
 import { Logo } from "@/components/layout/logo";
@@ -27,6 +33,9 @@ export default function LoginPage() {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
     hydrate();
@@ -61,22 +70,28 @@ export default function LoginPage() {
               noValidate
               onSubmit={(event) => {
                 event.preventDefault();
-                if (!isFilledText(userId, 3) || password.length < 8) return;
-                const ok = signIn(userId, password);
-                if (!ok) {
-                  const message = "That user ID or password is not recognised.";
-                  setError(message);
-                  toast.error(message);
+                if (!isFilledText(userId, 3) || password.length < 1 || busy) {
                   return;
                 }
-                const changePassword =
-                  useSessionStore.getState().mustChangePassword;
-                toast.success(
-                  changePassword
-                    ? "Choose a new password before opening the desk."
-                    : "Signed in.",
-                );
-                router.push(changePassword ? "/change-password" : "/dashboard");
+                setBusy(true);
+                void signIn(userId, password).then((message) => {
+                  setBusy(false);
+                  if (message) {
+                    setError(message);
+                    toast.error(message);
+                    return;
+                  }
+                  const changePassword =
+                    useSessionStore.getState().mustChangePassword;
+                  toast.success(
+                    changePassword
+                      ? "Choose a new password before opening the desk."
+                      : "Signed in.",
+                  );
+                  router.push(
+                    changePassword ? "/change-password" : "/dashboard",
+                  );
+                });
               }}
             >
               <label className="block text-sm text-navy">
@@ -109,27 +124,63 @@ export default function LoginPage() {
                     setError("");
                   }}
                   autoComplete="current-password"
-                  aria-invalid={password.length > 0 && password.length < 8}
+                  aria-invalid={false}
                   aria-label="Password"
                   className={cn(inputClass, "mt-2 pr-11")}
                 />
-                {password.length > 0 && password.length < 8 ? (
-                  <p className="mt-1.5 text-xs text-[#8C2F2F]">
-                    Enter at least 8 characters.
-                  </p>
-                ) : null}
               </div>
 
               {error ? <p className="text-sm text-[#8C2F2F]">{error}</p> : null}
 
               <button
                 type="submit"
-                disabled={!isFilledText(userId, 3) || password.length < 8}
+                disabled={
+                  busy || !isFilledText(userId, 3) || password.length < 1
+                }
                 className={cn(submitClass, "h-12 w-full text-base")}
               >
-                Sign in
+                {busy ? "Signing in" : "Sign in"}
+              </button>
+              <button
+                type="button"
+                className="text-sm text-navy underline decoration-navy/30 underline-offset-4"
+                onClick={() => setForgot(true)}
+              >
+                Forgot password
               </button>
             </form>
+            {forgot ? (
+              <Modal title="Reset password" onClose={() => setForgot(false)}>
+                <form
+                  className="grid gap-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!email.includes("@")) return;
+                    void forgotPassword(email.trim().toLowerCase())
+                      .then(() => {
+                        setForgot(false);
+                        toast.success(
+                          "If that address is on the register, a reset link is the next step. Email is not sending on this deployment, so ask an administrator to reset the password.",
+                        );
+                      })
+                      .catch((reason) => toast.error(describeError(reason)));
+                  }}
+                >
+                  <Field label="Email">
+                    <input
+                      value={email}
+                      onChange={(event) =>
+                        setEmail(stripSpace(event.target.value))
+                      }
+                      className="h-11 w-full rounded-[8px] border border-line px-3 text-base text-navy"
+                    />
+                  </Field>
+                  <button type="submit" className={submitClass}>
+                    Request reset
+                  </button>
+                </form>
+              </Modal>
+            ) : null}
           </div>
         </div>
       </section>

@@ -1,69 +1,110 @@
 import { create } from "zustand";
 
 import {
-  findOfficer,
-  findOfficerById,
-  hydrateAccountOverrides,
-} from "@/lib/officers";
+  clearSession,
+  describeError,
+  getMe,
+  hasStoredSession,
+  login,
+  logout,
+  profileFrom,
+  readMustChange,
+  restoreSession,
+  type SessionProfile,
+} from "@/lib/api";
 import { useRoleStore } from "@/store/useRoleStore";
-
-const SESSION_KEY = "blueid-session";
 
 type SessionState = {
   signedIn: boolean;
   ready: boolean;
   userId: string | null;
+  profile: SessionProfile | null;
   mustChangePassword: boolean;
-  hydrate: () => void;
-  signIn: (userId: string, password: string) => boolean;
-  signOut: () => void;
-  clearPasswordChange: () => void;
+  hydrate: () => Promise<void>;
+  signIn: (userId: string, password: string) => Promise<string | null>;
+  signOut: () => Promise<void>;
 };
+
+let hydrating: Promise<void> | null = null;
+
+function applyProfile(
+  set: (partial: Partial<SessionState>) => void,
+  profile: SessionProfile,
+  mustChangePassword: boolean,
+) {
+  useRoleStore.getState().setRole(profile.roleId);
+  set({
+    signedIn: true,
+    ready: true,
+    userId: profile.staffId || profile.email,
+    profile,
+    mustChangePassword,
+  });
+}
 
 export const useSessionStore = create<SessionState>((set) => ({
   signedIn: false,
   ready: false,
   userId: null,
+  profile: null,
   mustChangePassword: false,
   hydrate: () => {
-    hydrateAccountOverrides();
-    const saved = window.localStorage.getItem(SESSION_KEY);
-    const officer = saved ? findOfficerById(saved) : undefined;
-    if (officer && officer.status === "Active") {
-      useRoleStore.getState().setRole(officer.role);
-      set({
-        signedIn: true,
-        ready: true,
-        userId: officer.userId,
-        mustChangePassword: officer.mustChangePassword,
-      });
-      return;
+    if (hydrating) return hydrating;
+    hydrating = (async () => {
+      if (!hasStoredSession()) {
+        set({
+          signedIn: false,
+          ready: true,
+          userId: null,
+          profile: null,
+          mustChangePassword: false,
+        });
+        return;
+      }
+      try {
+        await restoreSession();
+        const profile = await getMe();
+        applyProfile(set, profile, readMustChange());
+      } catch {
+        clearSession();
+        set({
+          signedIn: false,
+          ready: true,
+          userId: null,
+          profile: null,
+          mustChangePassword: false,
+        });
+      }
+    })().finally(() => {
+      hydrating = null;
+    });
+    return hydrating;
+  },
+  signIn: async (userId, password) => {
+    try {
+      const data = await login(userId, password);
+      if (data.mustChangePassword) {
+        applyProfile(set, profileFrom(data.user), true);
+        return null;
+      }
+      const profile = await getMe();
+      applyProfile(set, profile, false);
+      return null;
+    } catch (error) {
+      return describeError(error);
     }
-    window.localStorage.removeItem(SESSION_KEY);
+  },
+  signOut: async () => {
+    try {
+      await logout();
+    } catch {
+      clearSession();
+    }
     set({
       signedIn: false,
-      ready: true,
       userId: null,
+      profile: null,
       mustChangePassword: false,
     });
-  },
-  signIn: (userId, password) => {
-    hydrateAccountOverrides();
-    const officer = findOfficer(userId, password);
-    if (!officer) return false;
-    window.localStorage.setItem(SESSION_KEY, officer.userId);
-    useRoleStore.getState().setRole(officer.role);
-    set({
-      signedIn: true,
-      ready: true,
-      userId: officer.userId,
-      mustChangePassword: officer.mustChangePassword,
-    });
-    return true;
-  },
-  clearPasswordChange: () => set({ mustChangePassword: false }),
-  signOut: () => {
-    window.localStorage.removeItem(SESSION_KEY);
-    set({ signedIn: false, userId: null, mustChangePassword: false });
   },
 }));

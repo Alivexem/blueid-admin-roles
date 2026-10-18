@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { ChevronDown, Menu } from "lucide-react";
 
-import { roleMeta, type RoleId } from "@/lib/dashboard";
 import { useSessionStore } from "@/store/useSessionStore";
 import { cn } from "@/lib/utils";
 
@@ -17,16 +16,11 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export function DashboardHeader({
-  role,
-  onMenu,
-}: {
-  role: RoleId;
-  onMenu: () => void;
-}) {
+export function DashboardHeader({ onMenu }: { onMenu: () => void }) {
   const router = useRouter();
   const signOut = useSessionStore((state) => state.signOut);
-  const meta = roleMeta(role);
+  const profile = useSessionStore((state) => state.profile);
+  const name = profile?.fullName || "Officer";
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -65,10 +59,10 @@ export function DashboardHeader({
           onClick={() => setOpen((value) => !value)}
         >
           <span className="grid size-9 place-items-center overflow-hidden rounded-full bg-navy text-xs font-medium text-white">
-            {initials(meta.officer)}
+            {initials(name)}
           </span>
           <span className="hidden text-sm font-medium text-navy sm:block">
-            {meta.officer}
+            {name}
           </span>
           <ChevronDown
             className={cn(
@@ -87,8 +81,7 @@ export function DashboardHeader({
               role="menuitem"
               className="w-full px-4 py-2.5 text-left text-sm text-navy hover:bg-stone"
               onClick={() => {
-                signOut();
-                router.push("/login");
+                void signOut().then(() => router.push("/login"));
               }}
             >
               Logout

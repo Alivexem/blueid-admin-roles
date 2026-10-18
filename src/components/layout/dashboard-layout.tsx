@@ -6,58 +6,79 @@ import { useRouter } from "next/router";
 
 import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { DashboardSidebar } from "@/components/layout/dashboard-sidebar";
-import { navFor } from "@/lib/dashboard";
-import { findOfficerById, hydrateAccountOverrides } from "@/lib/officers";
-import { useRoleStore } from "@/store/useRoleStore";
+import { deskNav } from "@/lib/access";
 import { useSessionStore } from "@/store/useSessionStore";
-
-const SESSION_KEY = "blueid-session";
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const role = useRoleStore((state) => state.role);
+  const profile = useSessionStore((state) => state.profile);
+  const signedIn = useSessionStore((state) => state.signedIn);
+  const ready = useSessionStore((state) => state.ready);
+  const mustChangePassword = useSessionStore(
+    (state) => state.mustChangePassword,
+  );
+  const hydrate = useSessionStore((state) => state.hydrate);
   const [menu, setMenu] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [authed, setAuthed] = useState(false);
 
   useEffect(() => {
-    hydrateAccountOverrides();
-    const saved = window.localStorage.getItem(SESSION_KEY);
-    const officer = saved ? findOfficerById(saved) : undefined;
-    if (officer && officer.status === "Active") {
-      useRoleStore.setState({ role: officer.role });
-      useSessionStore.setState({
-        signedIn: true,
-        userId: officer.userId,
-        mustChangePassword: officer.mustChangePassword,
-      });
-      if (officer.mustChangePassword) {
-        router.replace("/change-password");
-        return;
-      }
-      setAuthed(true);
-    }
+    void hydrate();
     setCollapsed(window.localStorage.getItem("blueid-sidebar") === "collapsed");
-    setReady(true);
-  }, []);
+  }, [hydrate]);
 
   useEffect(() => {
     if (!ready || !router.isReady) return;
-    if (!authed) {
+    if (!signedIn || !profile) {
       router.replace("/login");
       return;
     }
-    const allowed = navFor(role).some((item) =>
-      item.href === "/dashboard"
-        ? router.pathname === "/dashboard"
-        : router.pathname.startsWith(item.href),
-    );
+    if (mustChangePassword) {
+      router.replace("/change-password");
+      return;
+    }
+    if (router.pathname === "/404") return;
+    const allowed =
+      router.pathname.startsWith("/dashboard/settings") ||
+      deskNav(profile.roleId, profile.permissions?.granted).some((item) =>
+        item.href === "/dashboard"
+          ? router.pathname === "/dashboard"
+          : router.pathname.startsWith(item.href),
+      );
     if (!allowed) router.replace("/dashboard");
-  }, [ready, authed, role, router]);
+  }, [ready, signedIn, profile, mustChangePassword, router]);
 
-  if (!ready || !authed) {
-    return <div className="h-screen bg-stone" />;
+  if (!ready || !signedIn || !profile || mustChangePassword) {
+    return (
+      <div
+        className="flex h-screen bg-stone"
+        aria-busy="true"
+        aria-label="Loading desk"
+      >
+        <div className="hidden w-[248px] border-r border-line bg-white p-5 md:block">
+          <div className="h-8 w-28 animate-pulse rounded-[8px] bg-stone" />
+          <div className="mt-8 space-y-3">
+            {Array.from({ length: 8 }, (_, index) => (
+              <div
+                key={index}
+                className="h-9 animate-pulse rounded-[8px] bg-stone"
+              />
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 p-6">
+          <div className="h-4 w-24 animate-pulse rounded-[8px] bg-white" />
+          <div className="mt-3 h-10 w-64 animate-pulse rounded-[8px] bg-white" />
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div
+                key={index}
+                className="h-24 animate-pulse rounded-[8px] bg-white"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -67,7 +88,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       </Head>
       <div className="hidden h-full md:block">
         <DashboardSidebar
-          role={role}
           collapsed={collapsed}
           onToggle={() =>
             setCollapsed((value) => {
@@ -91,7 +111,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           />
           <div className="relative h-full">
             <DashboardSidebar
-              role={role}
               onNavigate={() => setMenu(false)}
               onClose={() => setMenu(false)}
             />
@@ -99,7 +118,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
-        <DashboardHeader role={role} onMenu={() => setMenu(true)} />
+        <DashboardHeader onMenu={() => setMenu(true)} />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>

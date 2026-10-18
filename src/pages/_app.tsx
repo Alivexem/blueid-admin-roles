@@ -22,7 +22,9 @@ const fraunces = Fraunces({
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
-  const isDashboard = router.pathname.startsWith("/dashboard");
+  const isDashboard =
+    router.pathname.startsWith("/dashboard") ||
+    (router.pathname === "/404" && router.asPath.startsWith("/dashboard"));
 
   return (
     <div className={`${nataSans.variable} ${fraunces.variable} font-sans`}>

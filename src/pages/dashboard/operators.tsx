@@ -1,131 +1,156 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { MoreHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  EmptyState,
   Field,
+  Modal,
   PageHeading,
   Panel,
-  PasswordInput,
+  TableSkeleton,
   fieldClass,
   submitClass,
 } from "@/components/dashboard/ui";
 import { assignableRoles, roleMeta, type RoleId } from "@/lib/dashboard";
 import {
-  OFFICERS,
-  saveAccountOverride,
+  LGAS,
+  activateUser,
+  createUser,
+  describeError,
+  lgaName,
+  listCooperatives,
+  listUsers,
+  resetUserPassword,
+  setUserStatus,
+  toApiRole,
+  toRoleId,
+  updateUser,
   type AccountStatus,
-} from "@/lib/officers";
+  type CooperativeRow,
+  type Operator,
+} from "@/lib/api";
 import { stripSpace, tidyText } from "@/lib/validation";
 import { useSessionStore } from "@/store/useSessionStore";
 
-const LGAS = [
-  "Abi",
-  "Akamkpa",
-  "Akpabuyo",
-  "Bakassi",
-  "Bekwarra",
-  "Biase",
-  "Boki",
-  "Calabar Municipal",
-  "Calabar South",
-  "Etung",
-  "Ikom",
-  "Obanliku",
-  "Obubra",
-  "Obudu",
-  "Odukpani",
-  "Ogoja",
-  "Yakurr",
-  "Yala",
-];
+const USER_ID = /^[a-z0-9._-]{3,40}$/;
 
-const COOPERATIVES = [
-  "Ikang Fishers Cooperative",
-  "Esuk Mba Boat Owners",
-  "Creek Town Fishers",
-];
+function scopeLabel(account: Operator, cooperatives: CooperativeRow[]) {
+  const lgas = account.scope?.lgas?.map(lgaName).filter(Boolean) ?? [];
+  if (lgas.length) return lgas.join(", ");
+  const cooperative = cooperatives.find(
+    (item) => item.id === account.cooperative,
+  );
+  if (cooperative) return cooperative.name;
+  if (account.role === "COOPERATIVE_OFFICER") return "Cooperative";
+  return "Statewide";
+}
 
-function temporaryPassword() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  let body = "";
-  for (let index = 0; index < 8; index += 1) {
-    body += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return `${body}#1`;
+function statusLabel(status: AccountStatus) {
+  if (status === "ACTIVE") return "Active";
+  if (status === "SUSPENDED") return "Suspended";
+  if (status === "PENDING") return "Pending";
+  return "Disabled";
 }
 
 export default function OperatorsPage() {
-  const sessionId = useSessionStore((state) => state.userId);
-  const roles = assignableRoles("super");
-  const [tick, setTick] = useState(0);
+  const profile = useSessionStore((state) => state.profile);
+  const roles = assignableRoles(profile?.roleId ?? "super");
+  const [accounts, setAccounts] = useState<Operator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [cooperatives, setCooperatives] = useState<CooperativeRow[]>([]);
+  const [loadError, setLoadError] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [userId, setUserId] = useState("");
   const [role, setRole] = useState<RoleId>(roles[0]?.id ?? "state");
-  const [lga, setLga] = useState(LGAS[3]);
-  const [cooperative, setCooperative] = useState(COOPERATIVES[0]);
-  const [password, setPassword] = useState("");
+  const [lga, setLga] = useState(LGAS[3].code);
+  const [cooperative, setCooperative] = useState("");
   const [issued, setIssued] = useState("");
+  const [busy, setBusy] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
     null,
   );
-  const [editing, setEditing] = useState<{
-    userId: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    role: RoleId;
-    lga: string;
-    cooperative: string;
-  } | null>(null);
-  const accounts = useMemo(() => OFFICERS.slice(), [tick]);
-  const menuAccount = accounts.find((item) => item.userId === menuId) ?? null;
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Operator | null>(null);
+  const [statusFor, setStatusFor] = useState<Operator | null>(null);
+  const [reason, setReason] = useState("");
+
+  async function reload() {
+    const { data } = await listUsers();
+    setAccounts(data);
+  }
 
   useEffect(() => {
-    if (!menuId && !editing) return;
+    let live = true;
+    void Promise.all([listUsers(), listCooperatives()])
+      .then(([users, societies]) => {
+        if (!live) return;
+        setAccounts(users.data);
+        setCooperatives(societies);
+        setCooperative(societies[0]?.id ?? "");
+      })
+      .catch((error) => {
+        if (live) setLoadError(describeError(error));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!menuId && !editing && !statusFor) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setMenuId(null);
       setEditing(null);
+      setStatusFor(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [menuId, editing]);
+  }, [menuId, editing, statusFor]);
 
-  const emailTaken = OFFICERS.some(
-    (item) => item.email.toLowerCase() === email.trim().toLowerCase(),
-  );
-  const idTaken = OFFICERS.some((item) => item.userId === userId);
+  const menuAccount = accounts.find((item) => item.id === menuId) ?? null;
   const canCreate =
     tidyText(firstName).length >= 2 &&
     tidyText(lastName).length >= 2 &&
     email.includes("@") &&
-    !emailTaken &&
-    userId.length >= 3 &&
-    !idTaken &&
+    USER_ID.test(userId) &&
     (role !== "lga" || Boolean(lga)) &&
     (role !== "cooperative" || Boolean(cooperative)) &&
-    (password.length === 0 || password.length >= 8);
+    !busy;
 
   return (
     <div className="space-y-6">
-      <PageHeading
-        kicker="Accounts"
-        title="Operators"
-        text="Create and suspend the people who work the register. This desk cannot create another Super Administrator, and it cannot change its own role or status."
-      />
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <PageHeading
+          kicker="Accounts"
+          title="Operators"
+          text="Create and suspend the people who work the register. This desk cannot create another Super Administrator, and it cannot change its own role or status."
+        />
+        <button
+          type="button"
+          className={submitClass}
+          onClick={() => setCreating(true)}
+        >
+          New operator
+        </button>
+      </div>
 
       {issued ? (
         <Panel title="Temporary password">
           <div className="space-y-3 p-5 text-sm">
             <p className="text-navy">
               Show this password once, then pass it to the officer. It will not
-              be shown again. They must replace it at the next sign-in.
+              be shown again, and it is not emailed. They must replace it at the
+              next sign-in.
             </p>
             <p className="font-serif text-2xl tracking-[-0.03em] text-navy">
               {issued}
@@ -141,131 +166,135 @@ export default function OperatorsPage() {
         </Panel>
       ) : null}
 
-      <Panel title="New operator">
-        <form
-          className="grid gap-4 p-5 md:grid-cols-2"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!canCreate) return;
-            const secret = password || temporaryPassword();
-            OFFICERS.push({
-              userId,
-              password: secret,
-              role,
-              firstName: tidyText(firstName),
-              lastName: tidyText(lastName),
-              email: email.trim().toLowerCase(),
-              status: "Active",
-              mustChangePassword: true,
-              lga: role === "lga" ? lga : undefined,
-              cooperative: role === "cooperative" ? cooperative : undefined,
-            });
-            setTick((value) => value + 1);
-            setFirstName("");
-            setLastName("");
-            setEmail("");
-            setUserId("");
-            setPassword("");
-            setIssued(secret);
-            toast.success("Operator account created.");
-          }}
-        >
-          <Field label="First name">
-            <input
-              value={firstName}
-              onChange={(event) => setFirstName(tidyText(event.target.value))}
-              className={fieldClass}
-            />
-          </Field>
-          <Field label="Last name">
-            <input
-              value={lastName}
-              onChange={(event) => setLastName(tidyText(event.target.value))}
-              className={fieldClass}
-            />
-          </Field>
-          <Field
-            label="Email"
-            error={emailTaken ? "That email is already used." : ""}
+      {creating ? (
+        <Modal title="New operator" onClose={() => setCreating(false)}>
+          <form
+            className="grid gap-4 p-5 md:grid-cols-2"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!canCreate) return;
+              setBusy(true);
+              void createUser({
+                email: email.trim().toLowerCase(),
+                firstName: tidyText(firstName),
+                lastName: tidyText(lastName),
+                role: toApiRole(role),
+                staffId: userId,
+                scope:
+                  role === "lga" || role === "enumerator"
+                    ? { lgas: [lga] }
+                    : undefined,
+                cooperative: role === "cooperative" ? cooperative : undefined,
+              })
+                .then(async (created) => {
+                  setFirstName("");
+                  setLastName("");
+                  setEmail("");
+                  setUserId("");
+                  setIssued(created.temporaryPassword ?? "");
+                  setCreating(false);
+                  await reload();
+                  toast.success("Operator account created.");
+                })
+                .catch((error) => toast.error(describeError(error)))
+                .finally(() => setBusy(false));
+            }}
           >
-            <input
-              value={email}
-              onChange={(event) => setEmail(stripSpace(event.target.value))}
-              autoComplete="off"
-              className={fieldClass}
-            />
-          </Field>
-          <Field
-            label="User ID"
-            error={idTaken ? "That user ID is already used." : ""}
-          >
-            <input
-              value={userId}
-              onChange={(event) =>
-                setUserId(stripSpace(event.target.value).toLowerCase())
-              }
-              autoComplete="off"
-              className={fieldClass}
-            />
-          </Field>
-          <Field label="Role">
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value as RoleId)}
-              className={fieldClass}
-            >
-              {roles.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {role === "lga" ? (
-            <Field label="Local government">
+            <Field label="First name">
+              <input
+                value={firstName}
+                onChange={(event) => setFirstName(tidyText(event.target.value))}
+                className={fieldClass}
+              />
+            </Field>
+            <Field label="Last name">
+              <input
+                value={lastName}
+                onChange={(event) => setLastName(tidyText(event.target.value))}
+                className={fieldClass}
+              />
+            </Field>
+            <Field label="Email">
+              <input
+                value={email}
+                onChange={(event) => setEmail(stripSpace(event.target.value))}
+                autoComplete="off"
+                className={fieldClass}
+              />
+            </Field>
+            <Field label="User ID">
+              <input
+                value={userId}
+                onChange={(event) =>
+                  setUserId(stripSpace(event.target.value).toLowerCase())
+                }
+                autoComplete="off"
+                className={fieldClass}
+              />
+            </Field>
+            <Field label="Role">
               <select
-                value={lga}
-                onChange={(event) => setLga(event.target.value)}
+                value={role}
+                onChange={(event) => setRole(event.target.value as RoleId)}
                 className={fieldClass}
               >
-                {LGAS.map((name) => (
-                  <option key={name}>{name}</option>
+                {roles.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
                 ))}
               </select>
             </Field>
-          ) : null}
-          {role === "cooperative" ? (
-            <Field label="Cooperative">
-              <select
-                value={cooperative}
-                onChange={(event) => setCooperative(event.target.value)}
-                className={fieldClass}
+            {role === "lga" || role === "enumerator" ? (
+              <Field label="Local government">
+                <select
+                  value={lga}
+                  onChange={(event) => setLga(event.target.value)}
+                  className={fieldClass}
+                >
+                  {LGAS.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+            {role === "cooperative" ? (
+              <Field label="Cooperative">
+                <select
+                  value={cooperative}
+                  onChange={(event) => setCooperative(event.target.value)}
+                  className={fieldClass}
+                >
+                  {cooperatives.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={!canCreate}
+                className={submitClass}
               >
-                {COOPERATIVES.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-            </Field>
-          ) : null}
-          <Field label="Password">
-            <PasswordInput
-              value={password}
-              onChange={(event) => setPassword(stripSpace(event.target.value))}
-              autoComplete="new-password"
-              placeholder="Leave blank to issue one"
-            />
-          </Field>
-          <div className="md:col-span-2">
-            <button type="submit" disabled={!canCreate} className={submitClass}>
-              Create account
-            </button>
-          </div>
-        </form>
-      </Panel>
+                Create account
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
 
       <Panel>
-        <div className="overflow-x-auto">
+        {loadError ? (
+          <p className="px-5 py-4 text-sm text-[#8C2F2F]">{loadError}</p>
+        ) : null}
+        {loading ? <TableSkeleton rows={6} columns={5} /> : null}
+        <div className={loading ? "hidden" : "overflow-x-auto"}>
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-stone text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
               <tr>
@@ -277,34 +306,48 @@ export default function OperatorsPage() {
               </tr>
             </thead>
             <tbody>
+              {!loading && accounts.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>
+                    <EmptyState
+                      title="No operators yet"
+                      text="Accounts created for this desk will appear here."
+                    />
+                  </td>
+                </tr>
+              ) : null}
               {accounts.map((account) => {
-                const self = account.userId === sessionId;
+                const self = account.id === profile?.id;
                 return (
-                  <tr key={account.userId} className="border-t border-line">
+                  <tr key={account.id} className="border-t border-line">
                     <td className="px-4 py-3">
                       <p className="text-navy">
-                        {account.firstName} {account.lastName}
+                        {account.fullName ||
+                          `${account.firstName} ${account.lastName}`}
                         {self ? " · you" : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {account.email}
+                        {account.staffId ? ` · ${account.staffId}` : ""}
                       </p>
                     </td>
                     <td className="px-4 py-3 text-navy">
-                      {roleMeta(account.role).label}
+                      {roleMeta(toRoleId(account.role)).label}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {account.lga ?? account.cooperative ?? "Statewide"}
+                      {scopeLabel(account, cooperatives)}
                     </td>
-                    <td className="px-4 py-3 text-navy">{account.status}</td>
+                    <td className="px-4 py-3 text-navy">
+                      {statusLabel(account.status)}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
                         className="grid size-9 place-items-center rounded-[8px] text-navy hover:bg-stone"
-                        aria-label={`Actions for ${account.firstName} ${account.lastName}`}
-                        aria-expanded={menuId === account.userId}
+                        aria-label={`Actions for ${account.fullName}`}
+                        aria-expanded={menuId === account.id}
                         onClick={(event) => {
-                          if (menuId === account.userId) {
+                          if (menuId === account.id) {
                             setMenuId(null);
                             return;
                           }
@@ -314,7 +357,7 @@ export default function OperatorsPage() {
                             top: rect.bottom + 6,
                             right: window.innerWidth - rect.right,
                           });
-                          setMenuId(account.userId);
+                          setMenuId(account.id);
                         }}
                       >
                         <MoreHorizontal className="size-4" />
@@ -346,42 +389,55 @@ export default function OperatorsPage() {
               role="menuitem"
               className="block w-full px-4 py-2.5 text-left text-sm text-navy hover:bg-stone"
               onClick={() => {
-                setEditing({
-                  userId: menuAccount.userId,
-                  firstName: menuAccount.firstName,
-                  lastName: menuAccount.lastName,
-                  email: menuAccount.email,
-                  role: menuAccount.role,
-                  lga: menuAccount.lga ?? LGAS[3],
-                  cooperative: menuAccount.cooperative ?? COOPERATIVES[0],
-                });
+                setEditing(menuAccount);
                 setMenuId(null);
               }}
             >
               Edit
             </button>
-            {menuAccount.userId === sessionId ||
-            menuAccount.role === "super" ? null : (
-              <button
-                type="button"
-                role="menuitem"
-                className="block w-full px-4 py-2.5 text-left text-sm text-navy hover:bg-stone"
-                onClick={() => {
-                  const next: AccountStatus =
-                    menuAccount.status === "Active" ? "Suspended" : "Active";
-                  menuAccount.status = next;
-                  saveAccountOverride(menuAccount.userId, { status: next });
-                  setTick((value) => value + 1);
-                  setMenuId(null);
-                  toast.success(
-                    next === "Active"
-                      ? "Account activated."
-                      : "Account suspended.",
-                  );
-                }}
-              >
-                {menuAccount.status === "Active" ? "Suspend" : "Activate"}
-              </button>
+            {menuAccount.id === profile?.id ? null : (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="block w-full px-4 py-2.5 text-left text-sm text-navy hover:bg-stone"
+                  onClick={() => {
+                    if (menuAccount.status === "PENDING") {
+                      const account = menuAccount;
+                      setMenuId(null);
+                      void activateUser(account.id)
+                        .then(async () => {
+                          await reload();
+                          toast.success("Account approved.");
+                        })
+                        .catch((error) => toast.error(describeError(error)));
+                      return;
+                    }
+                    setStatusFor(menuAccount);
+                    setReason("");
+                    setMenuId(null);
+                  }}
+                >
+                  {menuAccount.status === "ACTIVE" ? "Suspend" : "Activate"}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="block w-full px-4 py-2.5 text-left text-sm text-navy hover:bg-stone"
+                  onClick={() => {
+                    const account = menuAccount;
+                    setMenuId(null);
+                    void resetUserPassword(account.id)
+                      .then((result) => {
+                        setIssued(result.temporaryPassword ?? "");
+                        toast.success("Temporary password issued.");
+                      })
+                      .catch((error) => toast.error(describeError(error)));
+                  }}
+                >
+                  Reset password
+                </button>
+              </>
             )}
           </div>
         </>
@@ -389,82 +445,106 @@ export default function OperatorsPage() {
 
       {editing ? (
         <EditOperatorModal
-          draft={editing}
-          self={editing.userId === sessionId}
-          onChange={setEditing}
+          account={editing}
+          self={editing.id === profile?.id}
+          cooperatives={cooperatives}
+          actorRole={profile?.roleId ?? "super"}
           onClose={() => setEditing(null)}
-          onSave={() => {
-            const account = OFFICERS.find(
-              (item) => item.userId === editing.userId,
-            );
-            if (!account) return;
-            const emailTakenByOther = OFFICERS.some(
-              (item) =>
-                item.userId !== account.userId &&
-                item.email.toLowerCase() === editing.email.trim().toLowerCase(),
-            );
-            if (
-              tidyText(editing.firstName).length < 2 ||
-              tidyText(editing.lastName).length < 2 ||
-              !editing.email.includes("@") ||
-              emailTakenByOther
-            ) {
-              toast.error("Check the name and email before saving.");
-              return;
-            }
-            account.firstName = tidyText(editing.firstName);
-            account.lastName = tidyText(editing.lastName);
-            account.email = editing.email.trim().toLowerCase();
-            if (account.userId !== sessionId && account.role !== "super") {
-              account.role = editing.role;
-              account.lga = editing.role === "lga" ? editing.lga : undefined;
-              account.cooperative =
-                editing.role === "cooperative"
-                  ? editing.cooperative
-                  : undefined;
-            }
-            saveAccountOverride(account.userId, {
-              firstName: account.firstName,
-              lastName: account.lastName,
-              email: account.email,
-              role: account.role,
-              lga: account.lga,
-              cooperative: account.cooperative,
-            });
-            setTick((value) => value + 1);
+          onSaved={async () => {
             setEditing(null);
-            toast.success("Account updated.");
+            await reload();
           }}
         />
+      ) : null}
+
+      {statusFor ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-[8px] border border-line bg-white p-5"
+          >
+            <h2 className="text-base font-medium text-navy">
+              {statusFor.status === "ACTIVE"
+                ? "Suspend account"
+                : "Activate account"}
+            </h2>
+            <form
+              className="mt-4 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (tidyText(reason).length < 3) return;
+                const next: AccountStatus =
+                  statusFor.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
+                void setUserStatus(statusFor.id, next, tidyText(reason))
+                  .then(async () => {
+                    setStatusFor(null);
+                    await reload();
+                    toast.success(
+                      next === "ACTIVE"
+                        ? "Account activated."
+                        : "Account suspended.",
+                    );
+                  })
+                  .catch((error) => toast.error(describeError(error)));
+              }}
+            >
+              <Field label="Reason">
+                <input
+                  value={reason}
+                  onChange={(event) => setReason(tidyText(event.target.value))}
+                  className={fieldClass}
+                />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="h-11 border border-navy px-4 text-sm text-navy"
+                  onClick={() => setStatusFor(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={tidyText(reason).length < 3}
+                  className={submitClass}
+                >
+                  {statusFor.status === "ACTIVE" ? "Suspend" : "Activate"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       ) : null}
     </div>
   );
 }
 
-type EditDraft = {
-  userId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: RoleId;
-  lga: string;
-  cooperative: string;
-};
-
 function EditOperatorModal({
-  draft,
+  account,
   self,
-  onChange,
+  cooperatives,
+  actorRole,
   onClose,
-  onSave,
+  onSaved,
 }: {
-  draft: EditDraft;
+  account: Operator;
   self: boolean;
-  onChange: (draft: EditDraft) => void;
+  cooperatives: CooperativeRow[];
+  actorRole: RoleId;
   onClose: () => void;
-  onSave: () => void;
+  onSaved: () => Promise<void>;
 }) {
-  const lockedRole = self;
+  const [firstName, setFirstName] = useState(account.firstName);
+  const [lastName, setLastName] = useState(account.lastName);
+  const [role, setRole] = useState<RoleId>(toRoleId(account.role));
+  const [lga, setLga] = useState(account.scope?.lgas?.[0] ?? LGAS[3].code);
+  const [cooperative, setCooperative] = useState(
+    account.cooperative ?? cooperatives[0]?.id ?? "",
+  );
+  const [busy, setBusy] = useState(false);
+  const lockedRole = self || account.role === "SUPER_ADMIN";
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-navy/40 p-4">
       <button
@@ -500,60 +580,78 @@ function EditOperatorModal({
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            onSave();
+            if (busy) return;
+            setBusy(true);
+            void updateUser(account.id, {
+              firstName: tidyText(firstName),
+              lastName: tidyText(lastName),
+              ...(lockedRole
+                ? {}
+                : {
+                    role: toApiRole(role),
+                    scope:
+                      role === "lga" || role === "enumerator"
+                        ? { lgas: [lga] }
+                        : { lgas: [] },
+                    cooperative:
+                      role === "cooperative" ? cooperative : undefined,
+                  }),
+            })
+              .then(() => onSaved())
+              .then(() => toast.success("Account updated."))
+              .catch((error) => toast.error(describeError(error)))
+              .finally(() => setBusy(false));
           }}
         >
           <Field label="First name">
             <input
-              value={draft.firstName}
-              onChange={(event) =>
-                onChange({ ...draft, firstName: tidyText(event.target.value) })
-              }
+              value={firstName}
+              onChange={(event) => setFirstName(tidyText(event.target.value))}
               className={fieldClass}
             />
           </Field>
           <Field label="Last name">
             <input
-              value={draft.lastName}
-              onChange={(event) =>
-                onChange({ ...draft, lastName: tidyText(event.target.value) })
-              }
+              value={lastName}
+              onChange={(event) => setLastName(tidyText(event.target.value))}
               className={fieldClass}
             />
           </Field>
           <Field label="Email">
             <input
-              value={draft.email}
-              onChange={(event) =>
-                onChange({ ...draft, email: stripSpace(event.target.value) })
-              }
-              className={fieldClass}
+              value={account.email}
+              readOnly
+              className={`${fieldClass} bg-stone text-muted-foreground`}
             />
           </Field>
           <Field label="User ID">
-            <input value={draft.userId} readOnly className={cnField} />
+            <input
+              value={account.staffId || "—"}
+              readOnly
+              className={`${fieldClass} bg-stone text-muted-foreground`}
+            />
           </Field>
           <Field label="Role">
             {lockedRole ? (
               <>
                 <input
-                  value={roleMeta(draft.role).label}
+                  value={roleMeta(toRoleId(account.role)).label}
                   readOnly
-                  className={cnField}
+                  className={`${fieldClass} bg-stone text-muted-foreground`}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Your own role stays as it is.
-                </p>
+                {self ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Your own role stays as it is.
+                  </p>
+                ) : null}
               </>
             ) : (
               <select
-                value={draft.role}
-                onChange={(event) =>
-                  onChange({ ...draft, role: event.target.value as RoleId })
-                }
+                value={role}
+                onChange={(event) => setRole(event.target.value as RoleId)}
                 className={fieldClass}
               >
-                {assignableRoles("super").map((item) => (
+                {assignableRoles(actorRole).map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.label}
                   </option>
@@ -561,32 +659,32 @@ function EditOperatorModal({
               </select>
             )}
           </Field>
-          {draft.role === "lga" && !lockedRole ? (
+          {!lockedRole && (role === "lga" || role === "enumerator") ? (
             <Field label="Local government">
               <select
-                value={draft.lga}
-                onChange={(event) =>
-                  onChange({ ...draft, lga: event.target.value })
-                }
+                value={lga}
+                onChange={(event) => setLga(event.target.value)}
                 className={fieldClass}
               >
-                {LGAS.map((name) => (
-                  <option key={name}>{name}</option>
+                {LGAS.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
                 ))}
               </select>
             </Field>
           ) : null}
-          {draft.role === "cooperative" && !lockedRole ? (
+          {!lockedRole && role === "cooperative" ? (
             <Field label="Cooperative">
               <select
-                value={draft.cooperative}
-                onChange={(event) =>
-                  onChange({ ...draft, cooperative: event.target.value })
-                }
+                value={cooperative}
+                onChange={(event) => setCooperative(event.target.value)}
                 className={fieldClass}
               >
-                {COOPERATIVES.map((name) => (
-                  <option key={name}>{name}</option>
+                {cooperatives.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -599,7 +697,7 @@ function EditOperatorModal({
             >
               Cancel
             </button>
-            <button type="submit" className={submitClass}>
+            <button type="submit" disabled={busy} className={submitClass}>
               Save
             </button>
           </div>
@@ -608,5 +706,3 @@ function EditOperatorModal({
     </div>
   );
 }
-
-const cnField = `${fieldClass} bg-stone text-muted-foreground`;

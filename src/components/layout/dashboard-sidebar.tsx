@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
-import { navFor, roleMeta, type RoleId } from "@/lib/dashboard";
+import { deskNav } from "@/lib/access";
+import { roleMeta } from "@/lib/dashboard";
 import { useSessionStore } from "@/store/useSessionStore";
 import { cn } from "@/lib/utils";
 
@@ -51,13 +52,11 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
 };
 
 export function DashboardSidebar({
-  role,
   collapsed = false,
   onToggle,
   onNavigate,
   onClose,
 }: {
-  role: RoleId;
   collapsed?: boolean;
   onToggle?: () => void;
   onNavigate?: () => void;
@@ -65,12 +64,12 @@ export function DashboardSidebar({
 }) {
   const router = useRouter();
   const signOut = useSessionStore((state) => state.signOut);
+  const profile = useSessionStore((state) => state.profile);
+  const role = profile?.roleId ?? "state";
   const meta = roleMeta(role);
   const navRef = useRef<HTMLElement>(null);
   const [canScrollMore, setCanScrollMore] = useState(false);
-  const items = navFor(role).filter(
-    (item) => item.href !== "/dashboard/settings",
-  );
+  const items = deskNav(role, profile?.permissions?.granted);
 
   useEffect(() => {
     const nav = navRef.current;
@@ -195,8 +194,7 @@ export function DashboardSidebar({
             collapsed && "justify-center px-0",
           )}
           onClick={() => {
-            signOut();
-            router.push("/login");
+            void signOut().then(() => router.push("/login"));
           }}
         >
           <LogOut className="size-4 shrink-0" />

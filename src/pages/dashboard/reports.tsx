@@ -1,186 +1,131 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeading, Panel } from "@/components/dashboard/ui";
 import {
-  benefitsFor,
-  boatsFor,
-  communitiesFor,
-  fishermenFor,
-} from "@/lib/dashboard";
-import { useDraftStore } from "@/store/useDraftStore";
-import { useRoleStore } from "@/store/useRoleStore";
+  describeError,
+  downloadReport,
+  listProgrammes,
+  type ProgrammeRow,
+} from "@/lib/api";
 
-type ReportId = "fishermen" | "boats" | "benefits" | "communities";
-
-const REPORTS: { id: ReportId; label: string }[] = [
-  { id: "fishermen", label: "Fishermen" },
-  { id: "boats", label: "Boats and engines" },
-  { id: "benefits", label: "Benefits issued" },
-  { id: "communities", label: "Communities" },
+const FILES = [
+  {
+    label: "Register CSV",
+    path: "/reports/register.csv",
+    filename: "blue-id-register.csv",
+  },
+  {
+    label: "Register workbook",
+    path: "/reports/register.xlsx",
+    filename: "blue-id-register.xlsx",
+  },
+  {
+    label: "Boats CSV",
+    path: "/reports/boats.csv",
+    filename: "blue-id-boats.csv",
+  },
+  {
+    label: "Engines CSV",
+    path: "/reports/engines.csv",
+    filename: "blue-id-engines.csv",
+  },
+  {
+    label: "Statistics workbook",
+    path: "/reports/statistics.xlsx",
+    filename: "blue-id-statistics.xlsx",
+  },
+  {
+    label: "Summary PDF",
+    path: "/reports/summary.pdf",
+    filename: "blue-id-summary.pdf",
+  },
 ];
 
-function download(filename: string, rows: string[][]) {
-  const csv = rows
-    .map((row) =>
-      row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
-    )
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function ReportsPage() {
-  const role = useRoleStore((state) => state.role);
-  const extra = useDraftStore((state) => state.people);
-  const [report, setReport] = useState<ReportId>("fishermen");
+  const [programmes, setProgrammes] = useState<ProgrammeRow[]>([]);
+  const [programmeId, setProgrammeId] = useState("");
+  const [busy, setBusy] = useState("");
 
-  const table = useMemo(() => {
-    if (report === "boats") {
-      const rows = boatsFor(role, extra);
-      return {
-        head: ["Boat", "Registration", "Owner", "Blue ID", "Engine"],
-        body: rows.map((boat) => [
-          `${boat.name}, ${boat.length}`,
-          boat.registration,
-          boat.owner,
-          boat.id,
-          boat.engine ? `${boat.engine} ${boat.horsepower}` : "None",
-        ]),
-      };
-    }
-    if (report === "benefits") {
-      const rows = benefitsFor(role, extra);
-      return {
-        head: ["Person", "Blue ID", "Programme", "Item", "Date"],
-        body: rows.map((item) => [
-          item.name,
-          item.id,
-          item.programme,
-          item.item,
-          item.date,
-        ]),
-      };
-    }
-    if (report === "communities") {
-      const rows = communitiesFor(role, extra);
-      return {
-        head: [
-          "Community",
-          "Local government",
-          "Landing",
-          "Cold storage",
-          "Boat repair",
-        ],
-        body: rows.map((item) => [
-          item.name,
-          item.lga,
-          item.landing ? "Yes" : "No",
-          item.coldStorage ? "Yes" : "No",
-          item.boatRepair ? "Yes" : "No",
-        ]),
-      };
-    }
-    const rows = fishermenFor(role, extra);
-    return {
-      head: ["Name", "Blue ID", "Sex", "Community", "Work", "Status"],
-      body: rows.map((item) => [
-        item.name,
-        item.id,
-        item.sex,
-        item.community,
-        item.type,
-        item.status,
-      ]),
-    };
-  }, [report, role, extra]);
+  function save(path: string, filename: string) {
+    setBusy(path);
+    void downloadReport(path, filename)
+      .then(() => toast.success("Download started."))
+      .catch((reason) => toast.error(describeError(reason)))
+      .finally(() => setBusy(""));
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <PageHeading
-          kicker="Exports"
-          title="Reports"
-          text="The same table leaves the desk as a spreadsheet or a printed page."
-        />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {REPORTS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setReport(item.id)}
-            className={`h-10 px-4 text-sm ${
-              report === item.id
-                ? "bg-navy text-white"
-                : "border border-line bg-white text-navy"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="h-10 bg-navy px-4 text-sm text-white"
-          onClick={() => {
-            download(`blue-id-${report}.csv`, [table.head, ...table.body]);
-            toast.success("CSV downloaded.");
-          }}
-        >
-          Download CSV
-        </button>
-        <button
-          type="button"
-          className="h-10 border border-navy px-4 text-sm text-navy"
-          onClick={() => {
-            download(`blue-id-${report}.csv`, [table.head, ...table.body]);
-            toast.success("Spreadsheet downloaded.");
-          }}
-        >
-          Download for Excel
-        </button>
-        <button
-          type="button"
-          className="h-10 border border-line bg-white px-4 text-sm text-navy"
-          onClick={() => window.print()}
-        >
-          Print PDF
-        </button>
-      </div>
+      <PageHeading
+        kicker="Exports"
+        title="Reports"
+        text="Spreadsheets and the summary are produced by the register. This desk does not build them from the screen."
+      />
       <Panel>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="bg-stone text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-              <tr>
-                {table.head.map((cell) => (
-                  <th key={cell} className="px-4 py-3 font-medium">
-                    {cell}
-                  </th>
+        <ul>
+          {FILES.map((file) => (
+            <li
+              key={file.path}
+              className="flex items-center justify-between gap-4 border-t border-line px-5 py-3 text-sm first:border-t-0"
+            >
+              <span className="text-navy">{file.label}</span>
+              <button
+                type="button"
+                disabled={busy === file.path}
+                className="h-10 bg-navy px-4 text-sm text-white disabled:opacity-50"
+                onClick={() => save(file.path, file.filename)}
+              >
+                Download
+              </button>
+            </li>
+          ))}
+          <li className="flex flex-wrap items-center justify-between gap-4 border-t border-line px-5 py-3 text-sm">
+            <span className="text-navy">Beneficiaries CSV</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={programmeId}
+                onFocus={() => {
+                  if (programmes.length) return;
+                  void listProgrammes()
+                    .then((rows) => {
+                      setProgrammes(rows);
+                      setProgrammeId(rows[0]?.id ?? "");
+                    })
+                    .catch((reason) => toast.error(describeError(reason)));
+                }}
+                onChange={(event) => setProgrammeId(event.target.value)}
+                className="h-10 rounded-[8px] border border-line bg-white px-3 text-sm text-navy"
+              >
+                <option value="">Choose a programme</option>
+                {programmes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {table.body.map((row) => (
-                <tr key={row.join("-")} className="border-t border-line">
-                  {row.map((cell) => (
-                    <td key={cell} className="px-4 py-3 text-navy">
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </select>
+              <button
+                type="button"
+                disabled={!programmeId || busy === "beneficiaries"}
+                className="h-10 border border-navy px-4 text-sm text-navy disabled:opacity-50"
+                onClick={() => {
+                  setBusy("beneficiaries");
+                  void downloadReport(
+                    `/reports/programmes/${programmeId}/beneficiaries.csv`,
+                    "blue-id-beneficiaries.csv",
+                  )
+                    .then(() => toast.success("Download started."))
+                    .catch((reason) => toast.error(describeError(reason)))
+                    .finally(() => setBusy(""));
+                }}
+              >
+                Download
+              </button>
+            </div>
+          </li>
+        </ul>
       </Panel>
     </div>
   );

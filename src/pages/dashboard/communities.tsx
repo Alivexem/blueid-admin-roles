@@ -1,15 +1,70 @@
 "use client";
 
-import { PageHeading, Panel, YesNo } from "@/components/dashboard/ui";
-import { communitiesFor, fishermenFor } from "@/lib/dashboard";
-import { useDraftStore } from "@/store/useDraftStore";
-import { useRoleStore } from "@/store/useRoleStore";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+import {
+  EmptyState,
+  Field,
+  Modal,
+  PageHeading,
+  Panel,
+  TableSkeleton,
+  fieldClass,
+  submitClass,
+} from "@/components/dashboard/ui";
+import {
+  LGAS,
+  createCommunity,
+  describeError,
+  recalculateCommunities,
+  updateCommunity,
+  lgaName,
+  listCommunities,
+  type CommunityRow,
+} from "@/lib/api";
+import { tidyText } from "@/lib/validation";
+import { useSessionStore } from "@/store/useSessionStore";
+
+function facility(row: CommunityRow, key: string) {
+  const value = row.facilities?.[key];
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(row.landingSites) && key === "landing") {
+    return row.landingSites.length ? "Yes" : "No";
+  }
+  return "—";
+}
 
 export default function CommunitiesPage() {
-  const role = useRoleStore((state) => state.role);
-  const extra = useDraftStore((state) => state.people);
-  const communities = communitiesFor(role, extra);
-  const people = fishermenFor(role, extra);
+  const canManage = useSessionStore((state) =>
+    state.profile?.permissions?.granted?.includes("community:manage"),
+  );
+  const [rows, setRows] = useState<CommunityRow[]>([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [lga, setLga] = useState(LGAS[0].code);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<CommunityRow | null>(null);
+  const [editName, setEditName] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    void listCommunities()
+      .then((data) => {
+        if (live) setRows(data);
+      })
+      .catch((reason) => {
+        if (live) setError(describeError(reason));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -17,58 +72,176 @@ export default function CommunitiesPage() {
         <PageHeading
           kicker="Places"
           title="Communities"
-          text={
-            role === "super"
-              ? "Landing sites, cold storage, and boat repair across all 18 local governments. This list is read only."
-              : "Landing sites, cold storage, and boat repair, beside the people registered there."
-          }
+          text="Landing sites and facilities from the register, limited to the area this account can see."
         />
+        {canManage ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="h-11 border border-navy px-5 text-sm text-navy"
+              onClick={() => {
+                void recalculateCommunities()
+                  .then(() => listCommunities())
+                  .then(setRows)
+                  .then(() => toast.success("Community counts refreshed."))
+                  .catch((reason) => toast.error(describeError(reason)));
+              }}
+            >
+              Refresh counts
+            </button>
+            <button
+              type="button"
+              className={submitClass}
+              onClick={() => setOpen(true)}
+            >
+              Add a community
+            </button>
+          </div>
+        ) : null}
       </div>
+      {open ? (
+        <Modal title="Add a community" onClose={() => setOpen(false)}>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (tidyText(name).length < 2 || busy) return;
+              setBusy(true);
+              void createCommunity({ name: tidyText(name), lga })
+                .then(() => listCommunities())
+                .then((data) => {
+                  setRows(data);
+                  setName("");
+                  setOpen(false);
+                  toast.success("Community added.");
+                })
+                .catch((reason) => toast.error(describeError(reason)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <Field label="Name">
+              <input
+                value={name}
+                onChange={(event) => setName(tidyText(event.target.value))}
+                className={fieldClass}
+              />
+            </Field>
+            <Field label="Local government">
+              <select
+                value={lga}
+                onChange={(event) => setLga(event.target.value)}
+                className={fieldClass}
+              >
+                {LGAS.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <button
+              type="submit"
+              disabled={busy || tidyText(name).length < 2}
+              className={submitClass}
+            >
+              Add community
+            </button>
+          </form>
+        </Modal>
+      ) : null}
       <Panel>
-        <div className="overflow-x-auto">
+        {error ? (
+          <p className="px-5 py-4 text-sm text-[#8C2F2F]">{error}</p>
+        ) : null}
+        {loading ? <TableSkeleton rows={8} columns={6} /> : null}
+        <div className={loading ? "hidden" : "overflow-x-auto"}>
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-stone text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
               <tr>
                 <th className="px-4 py-3 font-medium">Community</th>
                 <th className="px-4 py-3 font-medium">LGA</th>
                 <th className="px-4 py-3 font-medium">Fishermen</th>
-                <th className="px-4 py-3 font-medium">Boats</th>
                 <th className="px-4 py-3 font-medium">Landing</th>
                 <th className="px-4 py-3 font-medium">Cold storage</th>
                 <th className="px-4 py-3 font-medium">Boat repair</th>
+                <th className="px-4 py-3 font-medium"> </th>
               </tr>
             </thead>
             <tbody>
-              {communities.map((community) => {
-                const members = people.filter(
-                  (item) => item.community === community.name,
-                );
-                const boats = members.reduce(
-                  (sum, item) => sum + item.boats.length,
-                  0,
-                );
-                return (
-                  <tr key={community.name} className="border-t border-line">
-                    <td className="px-4 py-3 text-navy">{community.name}</td>
-                    <td className="px-4 py-3">{community.lga}</td>
-                    <td className="px-4 py-3">{members.length}</td>
-                    <td className="px-4 py-3">{boats}</td>
-                    <td className="px-4 py-3">
-                      <YesNo value={community.landing} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <YesNo value={community.coldStorage} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <YesNo value={community.boatRepair} />
-                    </td>
-                  </tr>
-                );
-              })}
+              {!loading && rows.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    <EmptyState
+                      title="No communities in view"
+                      text="Communities in this account’s area will be listed here."
+                    />
+                  </td>
+                </tr>
+              ) : null}
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t border-line">
+                  <td className="px-4 py-3 text-navy">{row.name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {lgaName(row.lga)}
+                  </td>
+                  <td className="px-4 py-3 text-navy">
+                    {row.estimatedFishermen ?? "—"}
+                  </td>
+                  <td className="px-4 py-3">{facility(row, "landing")}</td>
+                  <td className="px-4 py-3">{facility(row, "coldStorage")}</td>
+                  <td className="px-4 py-3">{facility(row, "boatRepair")}</td>
+                  <td className="px-4 py-3 text-right">
+                    {canManage ? (
+                      <button
+                        type="button"
+                        className="h-9 border border-navy px-3 text-sm text-navy"
+                        onClick={() => {
+                          setEditing(row);
+                          setEditName(row.name);
+                        }}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </Panel>
+      {editing ? (
+        <Modal title="Edit community" onClose={() => setEditing(null)}>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (tidyText(editName).length < 2 || busy) return;
+              setBusy(true);
+              void updateCommunity(editing.id, { name: tidyText(editName) })
+                .then(() => listCommunities())
+                .then((data) => {
+                  setRows(data);
+                  setEditing(null);
+                  toast.success("Community updated.");
+                })
+                .catch((reason) => toast.error(describeError(reason)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <Field label="Name">
+              <input
+                value={editName}
+                onChange={(event) => setEditName(tidyText(event.target.value))}
+                className={fieldClass}
+              />
+            </Field>
+            <button type="submit" disabled={busy} className={submitClass}>
+              Save
+            </button>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }

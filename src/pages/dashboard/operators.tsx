@@ -14,7 +14,12 @@ import {
   fieldClass,
   submitClass,
 } from "@/components/dashboard/ui";
-import { assignableRoles, roleMeta, type RoleId } from "@/lib/dashboard";
+import {
+  ROLE_RANK,
+  assignableRoles,
+  roleMeta,
+  type RoleId,
+} from "@/lib/dashboard";
 import {
   LGAS,
   activateUser,
@@ -71,6 +76,7 @@ export default function OperatorsPage() {
   const [cooperative, setCooperative] = useState("");
   const [issued, setIssued] = useState("");
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
     null,
@@ -117,7 +123,18 @@ export default function OperatorsPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [menuId, editing, statusFor]);
 
-  const menuAccount = accounts.find((item) => item.id === menuId) ?? null;
+  const myRank = ROLE_RANK[profile?.roleId ?? "enumerator"];
+  const mine = [profile?.id, profile?.staffId, profile?.email]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.toLowerCase());
+  const listed = accounts.filter((account) => {
+    if (ROLE_RANK[toRoleId(account.role)] >= myRank) return false;
+    const keys = [account.id, account.staffId, account.email]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.toLowerCase());
+    return !keys.some((key) => mine.includes(key));
+  });
+  const menuAccount = listed.find((item) => item.id === menuId) ?? null;
   const canCreate =
     tidyText(firstName).length >= 2 &&
     tidyText(lastName).length >= 2 &&
@@ -138,7 +155,10 @@ export default function OperatorsPage() {
         <button
           type="button"
           className={submitClass}
-          onClick={() => setCreating(true)}
+          onClick={() => {
+            setFormError("");
+            setCreating(true);
+          }}
         >
           New operator
         </button>
@@ -173,9 +193,8 @@ export default function OperatorsPage() {
             noValidate
             onSubmit={(event) => {
               event.preventDefault();
-              if (!canCreate) return;
-              setBusy(true);
-              void createUser({
+              if (!canCreate || busy) return;
+              const payload = {
                 email: email.trim().toLowerCase(),
                 firstName: tidyText(firstName),
                 lastName: tidyText(lastName),
@@ -186,8 +205,12 @@ export default function OperatorsPage() {
                     ? { lgas: [lga] }
                     : undefined,
                 cooperative: role === "cooperative" ? cooperative : undefined,
-              })
-                .then(async (created) => {
+              };
+              setFormError("");
+              setBusy(true);
+              void (async () => {
+                try {
+                  const created = await createUser(payload);
                   setFirstName("");
                   setLastName("");
                   setEmail("");
@@ -196,11 +219,24 @@ export default function OperatorsPage() {
                   setCreating(false);
                   await reload();
                   toast.success("Operator account created.");
-                })
-                .catch((error) => toast.error(describeError(error)))
-                .finally(() => setBusy(false));
+                } catch (error) {
+                  const message = describeError(error);
+                  setFormError(message);
+                  toast.error(message);
+                } finally {
+                  setBusy(false);
+                }
+              })();
             }}
           >
+            {formError ? (
+              <p
+                role="alert"
+                className="rounded-[8px] border border-[#E7C7C7] bg-[#FDF6F6] px-3 py-2 text-sm text-[#8C2F2F] md:col-span-2"
+              >
+                {formError}
+              </p>
+            ) : null}
             <Field label="First name">
               <input
                 value={firstName}
@@ -306,17 +342,25 @@ export default function OperatorsPage() {
               </tr>
             </thead>
             <tbody>
-              {!loading && accounts.length === 0 ? (
+              {!loading && listed.length === 0 ? (
                 <tr>
                   <td colSpan={5}>
                     <EmptyState
-                      title="No operators yet"
-                      text="Accounts created for this desk will appear here."
+                      title={
+                        accounts.length
+                          ? "No accounts below your rank"
+                          : "No operators yet"
+                      }
+                      text={
+                        accounts.length
+                          ? "Your own account and accounts at the same rank are left off this list."
+                          : "Accounts created for this desk will appear here."
+                      }
                     />
                   </td>
                 </tr>
               ) : null}
-              {accounts.map((account) => {
+              {listed.map((account) => {
                 const self = account.id === profile?.id;
                 return (
                   <tr key={account.id} className="border-t border-line">

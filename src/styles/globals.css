@@ -118,9 +118,25 @@ select {
   scrollbar-color: #0a4c9a transparent;
 }
 
+[data-sonner-toaster] {
+  z-index: 100000 !important;
+}
+
 [data-sonner-toast].blueid-toast {
-  border-radius: 8px;
+  border-radius: 8px !important;
+  border: 1px solid #d4e3f5 !important;
   border-left: 4px solid #0a4c9a !important;
+  background: #ffffff !important;
+  color: #0e2f66 !important;
+  opacity: 1 !important;
+}
+
+[data-sonner-toast].blueid-toast[data-type="error"] {
+  border-left-color: #8c2f2f !important;
+}
+
+[data-sonner-toast][data-mounted="false"] {
+  opacity: 0 !important;
 }
 
 @media print {

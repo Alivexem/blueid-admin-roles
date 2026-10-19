@@ -55,6 +55,15 @@ export type SessionProfile = Operator & {
 
 type Detail = { message?: string; path?: string } | string;
 
+function detailList(details: unknown): Detail[] {
+  if (Array.isArray(details)) return details as Detail[];
+  if (typeof details === "string") return [details];
+  if (details && typeof details === "object" && "message" in details) {
+    return [details as Detail];
+  }
+  return [];
+}
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -186,7 +195,7 @@ function fail<T>(response: Response, payload: Envelope<T>) {
     payload.error?.message || response.statusText || "Request failed",
     payload.error?.code || "REQUEST_FAILED",
     response.status,
-    payload.error?.details ?? [],
+    detailList(payload.error?.details),
     payload.requestId,
   );
 }
@@ -310,7 +319,7 @@ export function describeError(error: unknown) {
   if (!(error instanceof ApiError)) {
     return "The request could not be completed.";
   }
-  const reasons = error.details
+  const reasons = detailList(error.details)
     .map((item) => (typeof item === "string" ? item : item.message))
     .filter((item): item is string => Boolean(item));
   switch (error.code) {
@@ -342,7 +351,7 @@ export function describeError(error: unknown) {
     case "ACCOUNT_PENDING":
       return "This account is waiting for approval.";
     case "EMAIL_TAKEN":
-      return "That email is already used.";
+      return error.message || "That email is already used.";
     case "DUPLICATE_KEY":
       return "That value is already used.";
     case "WEAK_PASSWORD":
@@ -359,7 +368,7 @@ export function describeError(error: unknown) {
 
 export function detailMessages(error: unknown) {
   if (!(error instanceof ApiError)) return [];
-  return error.details
+  return detailList(error.details)
     .map((item) => (typeof item === "string" ? item : item.message))
     .filter((item): item is string => Boolean(item));
 }

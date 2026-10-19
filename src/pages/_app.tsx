@@ -31,14 +31,10 @@ export default function App({ Component, pageProps }: AppProps) {
       <Toaster
         position="bottom-right"
         offset={16}
+        closeButton
+        duration={8000}
         toastOptions={{
           className: "blueid-toast",
-          style: {
-            borderRadius: "8px",
-            border: "1px solid #D4E3F5",
-            borderLeft: "4px solid #0A4C9A",
-            color: "#0E2F66",
-          },
         }}
       />
       {isDashboard ? (

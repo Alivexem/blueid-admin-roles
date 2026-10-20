@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
   TableSkeleton,
   fieldClass,
   submitClass,
@@ -125,22 +126,27 @@ export default function DevicesPage() {
                     {device.status || "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {device.status === "REVOKED" ? null : (
-                      <button
-                        type="button"
-                        className="h-9 border border-navy px-3 text-sm text-navy"
-                        onClick={() => {
-                          void revokeDevice(device.id)
-                            .then(() => load())
-                            .then(() => toast.success("Device revoked."))
-                            .catch((reason) =>
-                              toast.error(describeError(reason)),
-                            );
-                        }}
-                      >
-                        Revoke
-                      </button>
-                    )}
+                    <RowMenu
+                      label={`Actions for ${device.label || device.deviceCode || "this device"}`}
+                      items={
+                        device.status === "REVOKED"
+                          ? []
+                          : [
+                              {
+                                label: "Revoke",
+                                danger: true,
+                                onSelect: () => {
+                                  void revokeDevice(device.id)
+                                    .then(() => load())
+                                    .then(() => toast.success("Device revoked."))
+                                    .catch((reason) =>
+                                      toast.error(describeError(reason)),
+                                    );
+                                },
+                              },
+                            ]
+                      }
+                    />
                   </td>
                 </tr>
               ))}
@@ -158,12 +164,15 @@ export default function DevicesPage() {
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Accepted</th>
                 <th className="px-4 py-3 font-medium">Rejected</th>
+                <th className="w-14 px-4 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {!loading && batches.length === 0 ? (
                 <tr>
-                  <td colSpan={4}>
+                  <td colSpan={5}>
                     <EmptyState
                       title="No sync batches"
                       text="Uploads from enrolled devices will be listed here."
@@ -174,31 +183,36 @@ export default function DevicesPage() {
               {batches.map((batch) => (
                 <tr key={batch.id} className="border-t border-line">
                   <td className="px-4 py-3 text-navy">
-                    <button
-                      type="button"
-                      className="underline decoration-navy/30 underline-offset-4"
-                      onClick={() => {
-                        setBatchId(batch.id);
-                        void rejectedBatch(batch.id)
-                          .then((payload) => {
-                            setRejected(
-                              (payload.rejected ?? []).map(
-                                (item) =>
-                                  `${item.entity || "Record"} ${item.clientRecordId || ""}: ${item.reason || item.validationErrors?.[0]?.message || "Rejected"}`,
-                              ),
-                            );
-                          })
-                          .catch((reason) =>
-                            toast.error(describeError(reason)),
-                          );
-                      }}
-                    >
-                      {batch.deviceCode || batch.id}
-                    </button>
+                    {batch.deviceCode || batch.id}
                   </td>
                   <td className="px-4 py-3">{batch.status || "—"}</td>
                   <td className="px-4 py-3">{batch.accepted ?? "—"}</td>
                   <td className="px-4 py-3">{batch.rejected ?? "—"}</td>
+                  <td className="px-4 py-3 text-right">
+                    <RowMenu
+                      label="Batch actions"
+                      items={[
+                        {
+                          label: "Rejected records",
+                          onSelect: () => {
+                            setBatchId(batch.id);
+                            void rejectedBatch(batch.id)
+                              .then((payload) => {
+                                setRejected(
+                                  (payload.rejected ?? []).map(
+                                    (item) =>
+                                      `${item.entity || "Record"} ${item.clientRecordId || ""}: ${item.reason || item.validationErrors?.[0]?.message || "Rejected"}`,
+                                  ),
+                                );
+                              })
+                              .catch((reason) =>
+                                toast.error(describeError(reason)),
+                              );
+                          },
+                        },
+                      ]}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>

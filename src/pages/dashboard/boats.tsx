@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
   StatCard,
   StatSkeleton,
   TableSkeleton,
@@ -164,7 +165,8 @@ export default function BoatsPage() {
                   </td>
                   <td className="px-4 py-3">{label(boat.propulsion)}</td>
                   <td className="px-4 py-3 text-right">
-                    <AssetButtons
+                    <AssetMenu
+                      label={boat.name || "this boat"}
                       canManage={canManage}
                       canTransfer={canTransfer}
                       onEdit={() =>
@@ -221,7 +223,8 @@ export default function BoatsPage() {
                     {engine.blueId || "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <AssetButtons
+                    <AssetMenu
+                      label={engine.model || "this engine"}
                       canManage={canManage}
                       canTransfer={canTransfer}
                       onEdit={() =>
@@ -278,7 +281,8 @@ export default function BoatsPage() {
                   </td>
                   <td className="px-4 py-3">{item.quantity ?? "—"}</td>
                   <td className="px-4 py-3 text-right">
-                    <AssetButtons
+                    <AssetMenu
+                      label={item.description || "this equipment"}
                       canManage={canManage}
                       canTransfer={canTransfer}
                       onEdit={() =>
@@ -384,8 +388,18 @@ export default function BoatsPage() {
                 />
               </Field>
             ) : null}
-            <button type="submit" disabled={busy} className={submitClass}>
-              Save
+            <button
+              type="submit"
+              disabled={
+                busy || (target.mode !== "edit" && tidyText(reason).length < 3)
+              }
+              className={submitClass}
+            >
+              {target.mode === "edit"
+                ? "Save"
+                : target.mode === "transfer"
+                  ? "Transfer"
+                  : "Withdraw"}
             </button>
           </form>
         </Modal>
@@ -394,49 +408,33 @@ export default function BoatsPage() {
   );
 }
 
-function AssetButtons({
+function AssetMenu({
+  label,
   canManage,
   canTransfer,
   onEdit,
   onTransfer,
   onWithdraw,
 }: {
+  label: string;
   canManage: boolean;
   canTransfer: boolean;
   onEdit: () => void;
   onTransfer: () => void;
   onWithdraw: () => void;
 }) {
-  if (!canManage && !canTransfer) return null;
   return (
-    <div className="flex justify-end gap-2">
-      {canManage ? (
-        <button
-          type="button"
-          className="h-9 border border-navy px-3 text-sm text-navy"
-          onClick={onEdit}
-        >
-          Edit
-        </button>
-      ) : null}
-      {canTransfer ? (
-        <button
-          type="button"
-          className="h-9 border border-navy px-3 text-sm text-navy"
-          onClick={onTransfer}
-        >
-          Transfer
-        </button>
-      ) : null}
-      {canManage ? (
-        <button
-          type="button"
-          className="h-9 border border-line px-3 text-sm text-navy"
-          onClick={onWithdraw}
-        >
-          Withdraw
-        </button>
-      ) : null}
-    </div>
+    <RowMenu
+      label={`Actions for ${label}`}
+      items={[
+        ...(canManage ? [{ label: "Edit", onSelect: onEdit }] : []),
+        ...(canTransfer
+          ? [{ label: "Transfer", onSelect: onTransfer }]
+          : []),
+        ...(canManage
+          ? [{ label: "Withdraw", onSelect: onWithdraw, danger: true }]
+          : []),
+      ]}
+    />
   );
 }

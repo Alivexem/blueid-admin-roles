@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
   TableSkeleton,
   fieldClass,
   submitClass,
@@ -227,18 +228,20 @@ export default function SyncPage() {
                       {record.note ? ` · ${record.note}` : ""}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="h-9 border border-navy px-3 text-sm text-navy"
-                    onClick={() => {
-                      setEditing(record);
-                      setFirstName(record.data.firstName);
-                      setLastName(record.data.lastName);
-                      setAdding(true);
-                    }}
-                  >
-                    Edit
-                  </button>
+                  <RowMenu
+                    label={`Actions for ${record.data.firstName} ${record.data.lastName}`}
+                    items={[
+                      {
+                        label: "Edit",
+                        onSelect: () => {
+                          setEditing(record);
+                          setFirstName(record.data.firstName);
+                          setLastName(record.data.lastName);
+                          setAdding(true);
+                        },
+                      },
+                    ]}
+                  />
                 </li>
               ))}
             </ul>

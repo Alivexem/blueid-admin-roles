@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
 import { RegisterFisherman } from "@/components/dashboard/register-fisherman";
@@ -10,6 +9,8 @@ import {
   EmptyState,
   PageHeading,
   Panel,
+  RowMenu,
+  type RowMenuItem,
   TableSkeleton,
   fieldClass,
   submitClass,
@@ -40,10 +41,6 @@ export default function FishermenPage() {
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [refresh, setRefresh] = useState(0);
-  const [menuId, setMenuId] = useState<string | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(
-    null,
-  );
 
   useEffect(() => {
     let live = true;
@@ -79,7 +76,6 @@ export default function FishermenPage() {
       role === "enumerator";
   const can = (permission: string) => granted?.includes(permission) ?? false;
   const canEdit = can("fisherman:edit") || canRegister;
-  const menuRow = rows.find((row) => row.id === menuId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -168,27 +164,55 @@ export default function FishermenPage() {
                   </td>
                   <td className="px-4 py-3 text-navy">{title(row.status)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      className="grid size-9 place-items-center rounded-[8px] text-navy hover:bg-stone"
-                      aria-label={`Actions for ${row.fullName || "this fisherman"}`}
-                      aria-expanded={menuId === row.id}
-                      onClick={(event) => {
-                        if (menuId === row.id) {
-                          setMenuId(null);
-                          return;
-                        }
-                        const rect =
-                          event.currentTarget.getBoundingClientRect();
-                        setMenuPos({
-                          top: rect.bottom + 6,
-                          right: window.innerWidth - rect.right,
-                        });
-                        setMenuId(row.id);
-                      }}
-                    >
-                      <MoreHorizontal className="size-4" />
-                    </button>
+                    <RowMenu
+                      label={`Actions for ${row.fullName || "this fisherman"}`}
+                      items={
+                        [
+                          {
+                            label: "Open record",
+                            href: row.id
+                              ? `/dashboard/fishermen/${row.id}`
+                              : "/dashboard/fishermen",
+                          },
+                          canEdit
+                            ? {
+                                label: "Edit record",
+                                href: `/dashboard/fishermen/${row.id}?action=edit`,
+                              }
+                            : null,
+                          can("registration:verify") && !row.blueId
+                            ? {
+                                label: "Verify and issue Blue ID",
+                                onSelect: () => {
+                                  void verifyRegistration(row.id)
+                                    .then(() => {
+                                      toast.success(
+                                        "Verified. A Blue ID has been issued.",
+                                      );
+                                      setRefresh((value) => value + 1);
+                                    })
+                                    .catch((reason) =>
+                                      toast.error(describeError(reason)),
+                                    );
+                                },
+                              }
+                            : null,
+                          can("registration:status")
+                            ? {
+                                label: "Change status",
+                                href: `/dashboard/fishermen/${row.id}?action=status`,
+                              }
+                            : null,
+                          can("fisherman:delete")
+                            ? {
+                                label: "Withdraw record",
+                                href: `/dashboard/fishermen/${row.id}?action=withdraw`,
+                                danger: true,
+                              }
+                            : null,
+                        ].filter((item) => item !== null) as RowMenuItem[]
+                      }
+                    />
                   </td>
                 </tr>
               ))}
@@ -196,79 +220,6 @@ export default function FishermenPage() {
           </table>
         </div>
       </Panel>
-      {menuRow && menuPos ? (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-40 cursor-default"
-            aria-label="Close actions"
-            onClick={() => setMenuId(null)}
-          />
-          <div
-            role="menu"
-            className="fixed z-50 w-56 overflow-hidden rounded-[8px] border border-line bg-white shadow-[0_8px_24px_rgba(10,76,154,0.08)]"
-            style={{ top: menuPos.top, right: menuPos.right }}
-          >
-            <Link
-              href={`/dashboard/fishermen/${menuRow.id}`}
-              role="menuitem"
-              className="block px-4 py-2.5 text-sm text-navy hover:bg-stone"
-              onClick={() => setMenuId(null)}
-            >
-              Open record
-            </Link>
-            {canEdit ? (
-              <Link
-                href={`/dashboard/fishermen/${menuRow.id}?action=edit`}
-                role="menuitem"
-                className="block px-4 py-2.5 text-sm text-navy hover:bg-stone"
-                onClick={() => setMenuId(null)}
-              >
-                Edit record
-              </Link>
-            ) : null}
-            {can("registration:verify") && !menuRow.blueId ? (
-              <button
-                type="button"
-                role="menuitem"
-                className="block w-full px-4 py-2.5 text-left text-sm text-navy hover:bg-stone"
-                onClick={() => {
-                  const person = menuRow;
-                  setMenuId(null);
-                  void verifyRegistration(person.id)
-                    .then(() => {
-                      toast.success("Verified. A Blue ID has been issued.");
-                      setRefresh((value) => value + 1);
-                    })
-                    .catch((reason) => toast.error(describeError(reason)));
-                }}
-              >
-                Verify and issue Blue ID
-              </button>
-            ) : null}
-            {can("registration:status") ? (
-              <Link
-                href={`/dashboard/fishermen/${menuRow.id}?action=status`}
-                role="menuitem"
-                className="block px-4 py-2.5 text-sm text-navy hover:bg-stone"
-                onClick={() => setMenuId(null)}
-              >
-                Change status
-              </Link>
-            ) : null}
-            {can("fisherman:delete") ? (
-              <Link
-                href={`/dashboard/fishermen/${menuRow.id}?action=withdraw`}
-                role="menuitem"
-                className="block px-4 py-2.5 text-sm text-[#8C2F2F] hover:bg-stone"
-                onClick={() => setMenuId(null)}
-              >
-                Withdraw record
-              </Link>
-            ) : null}
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }

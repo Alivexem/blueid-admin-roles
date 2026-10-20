@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
   TableSkeleton,
   fieldClass,
   submitClass,
@@ -48,7 +49,10 @@ export default function AllocationsPage() {
   const [rows, setRows] = useState<AllocationRow[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [deciding, setDeciding] = useState<AllocationRow | null>(null);
+  const [decision, setDecision] = useState<{
+    row: AllocationRow;
+    status: "REJECTED" | "REVOKED";
+  } | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -112,36 +116,72 @@ export default function AllocationsPage() {
                   </td>
                   <td className="px-4 py-3 text-navy">{row.status || "—"}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      {canDeliver && row.status !== "DELIVERED" ? (
-                        <button
-                          type="button"
-                          className="h-9 border border-navy px-3 text-sm text-navy"
-                          onClick={() => {
-                            void deliverAllocation(row.id)
-                              .then(() => load())
-                              .then(() => toast.success("Delivery recorded."))
-                              .catch((reason) =>
-                                toast.error(describeError(reason)),
-                              );
-                          }}
-                        >
-                          Deliver
-                        </button>
-                      ) : null}
-                      {canApprove && row.status === "PENDING" ? (
-                        <button
-                          type="button"
-                          className="h-9 bg-navy px-3 text-sm text-white"
-                          onClick={() => {
-                            setDeciding(row);
-                            setReason("");
-                          }}
-                        >
-                          Decide
-                        </button>
-                      ) : null}
-                    </div>
+                    <RowMenu
+                      label={`Actions for ${person(row)}`}
+                      items={[
+                        ...(canDeliver && row.status === "APPROVED"
+                          ? [
+                              {
+                                label: "Deliver",
+                                onSelect: () => {
+                                  void deliverAllocation(row.id)
+                                    .then(() => load())
+                                    .then(() =>
+                                      toast.success("Delivery recorded."),
+                                    )
+                                    .catch((reason) =>
+                                      toast.error(describeError(reason)),
+                                    );
+                                },
+                              },
+                            ]
+                          : []),
+                        ...(canApprove && row.status === "PENDING"
+                          ? [
+                              {
+                                label: "Approve",
+                                onSelect: () => {
+                                  void setAllocationStatus(row.id, "APPROVED")
+                                    .then(() => load())
+                                    .then(() =>
+                                      toast.success("Allocation approved."),
+                                    )
+                                    .catch((reason) =>
+                                      toast.error(describeError(reason)),
+                                    );
+                                },
+                              },
+                            ]
+                          : []),
+                        ...(canApprove &&
+                        (row.status === "PENDING" || row.status === "APPROVED")
+                          ? [
+                              {
+                                label: "Reject",
+                                onSelect: () => {
+                                  setReason("");
+                                  setDecision({ row, status: "REJECTED" });
+                                },
+                              },
+                            ]
+                          : []),
+                        ...(canApprove &&
+                        (row.status === "PENDING" ||
+                          row.status === "APPROVED" ||
+                          row.status === "DELIVERED")
+                          ? [
+                              {
+                                label: "Revoke",
+                                danger: true,
+                                onSelect: () => {
+                                  setReason("");
+                                  setDecision({ row, status: "REVOKED" });
+                                },
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -149,39 +189,41 @@ export default function AllocationsPage() {
           </table>
         </div>
       </Panel>
-      {deciding ? (
-        <Modal title="Decide this allocation" onClose={() => setDeciding(null)}>
+      {decision ? (
+        <Modal
+          title={
+            decision.status === "REJECTED"
+              ? "Reject this allocation"
+              : "Revoke this allocation"
+          }
+          onClose={() => setDecision(null)}
+        >
           <form
             className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              const status = (
-                event.nativeEvent as SubmitEvent
-              ).submitter?.getAttribute("value");
-              if (
-                status !== "APPROVED" &&
-                status !== "REJECTED" &&
-                status !== "REVOKED"
-              ) {
-                return;
-              }
+              if (tidyText(reason).length < 3 || busy) return;
               setBusy(true);
               void setAllocationStatus(
-                deciding.id,
-                status,
-                tidyText(reason) || undefined,
+                decision.row.id,
+                decision.status,
+                tidyText(reason),
               )
                 .then(() => load())
                 .then(() => {
-                  setDeciding(null);
-                  toast.success("Allocation updated.");
+                  setDecision(null);
+                  toast.success(
+                    decision.status === "REJECTED"
+                      ? "Allocation rejected."
+                      : "Allocation revoked.",
+                  );
                 })
                 .catch((reason) => toast.error(describeError(reason)))
                 .finally(() => setBusy(false));
             }}
           >
             <p className="text-sm text-navy">
-              {person(deciding)} · {programme(deciding)}
+              {person(decision.row)} · {programme(decision.row)}
             </p>
             <Field label="Reason">
               <input
@@ -190,32 +232,13 @@ export default function AllocationsPage() {
                 className={fieldClass}
               />
             </Field>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="submit"
-                value="APPROVED"
-                disabled={busy}
-                className={submitClass}
-              >
-                Approve
-              </button>
-              <button
-                type="submit"
-                value="REJECTED"
-                disabled={busy}
-                className="h-11 border border-navy px-5 text-sm text-navy"
-              >
-                Reject
-              </button>
-              <button
-                type="submit"
-                value="REVOKED"
-                disabled={busy}
-                className="h-11 border border-line px-5 text-sm text-navy"
-              >
-                Revoke
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={busy || tidyText(reason).length < 3}
+              className={submitClass}
+            >
+              {decision.status === "REJECTED" ? "Reject" : "Revoke"}
+            </button>
           </form>
         </Modal>
       ) : null}

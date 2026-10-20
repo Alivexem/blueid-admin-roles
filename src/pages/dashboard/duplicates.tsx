@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { PageHeading, Panel, TableSkeleton } from "@/components/dashboard/ui";
+import {
+  PageHeading,
+  Panel,
+  RowMenu,
+  TableSkeleton,
+} from "@/components/dashboard/ui";
 import {
   describeError,
   lgaName,
@@ -79,43 +84,47 @@ export default function DuplicatesPage() {
                 {row.lga ? `, ${lgaName(row.lga)}` : ""}
                 {row.phone ? ` · ${row.phone}` : ""}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="h-10 bg-navy px-4 text-sm text-white"
-                  onClick={() => {
-                    void resolveDuplicate(row.id, {
-                      flagId: flag.id,
-                      resolution: "NOT_DUPLICATE",
-                      note: "Kept as two records.",
-                    })
-                      .then(() => {
-                        toast.success("Kept as two records.");
-                        return load();
-                      })
-                      .catch((reason) => toast.error(describeError(reason)));
-                  }}
-                >
-                  Keep both
-                </button>
-                <button
-                  type="button"
-                  className="h-10 border border-navy px-4 text-sm text-navy"
-                  onClick={() => {
-                    void resolveDuplicate(row.id, {
-                      flagId: flag.id,
-                      resolution: "MARKED_DUPLICATE",
-                      note: "Marked as a duplicate.",
-                    })
-                      .then(() => {
-                        toast.success("Marked as a duplicate.");
-                        return load();
-                      })
-                      .catch((reason) => toast.error(describeError(reason)));
-                  }}
-                >
-                  Mark as duplicate
-                </button>
+              <div className="flex justify-end">
+                <RowMenu
+                  label={`Actions for ${nameOf(row) || "this record"}`}
+                  items={[
+                    {
+                      label: "Keep both",
+                      onSelect: () => {
+                        void resolveDuplicate(row.id, {
+                          flagId: flag.id,
+                          resolution: "NOT_DUPLICATE",
+                          note: "Kept as two records.",
+                        })
+                          .then(() => {
+                            toast.success("Kept as two records.");
+                            return load();
+                          })
+                          .catch((reason) =>
+                            toast.error(describeError(reason)),
+                          );
+                      },
+                    },
+                    {
+                      label: "Mark as duplicate",
+                      danger: true,
+                      onSelect: () => {
+                        void resolveDuplicate(row.id, {
+                          flagId: flag.id,
+                          resolution: "MARKED_DUPLICATE",
+                          note: "Marked as a duplicate.",
+                        })
+                          .then(() => {
+                            toast.success("Marked as a duplicate.");
+                            return load();
+                          })
+                          .catch((reason) =>
+                            toast.error(describeError(reason)),
+                          );
+                      },
+                    },
+                  ]}
+                />
               </div>
             </div>
           </Panel>

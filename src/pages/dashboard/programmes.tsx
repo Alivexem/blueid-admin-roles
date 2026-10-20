@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
   StatCard,
   StatSkeleton,
   TableSkeleton,
@@ -319,57 +320,74 @@ export default function ProgrammesPage() {
                   <td className="px-4 py-3">{row.deliveredCount ?? 0}</td>
                   <td className="px-4 py-3">{row.remainingSlots ?? "—"}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      {canAllocate ? (
-                        <button
-                          type="button"
-                          className="h-9 border border-navy px-3 text-sm text-navy"
-                          onClick={() => {
-                            setEligibleFor(row.name);
-                            void listEligible(row.id)
-                              .then((people) =>
-                                setEligible(
-                                  people.map(
-                                    (person) =>
-                                      person.fullName ||
-                                      person.blueId ||
-                                      person.id,
-                                  ),
-                                ),
-                              )
-                              .catch((reason) =>
-                                toast.error(describeError(reason)),
-                              );
-                          }}
-                        >
-                          Eligible
-                        </button>
-                      ) : null}
-                      {canManage ? (
-                        <select
-                          value={row.status || "DRAFT"}
-                          className="h-9 rounded-[8px] border border-line px-2 text-sm text-navy"
-                          onChange={(event) => {
-                            const status = event.target.value as
-                              "DRAFT" | "OPEN" | "CLOSED" | "ARCHIVED";
-                            void setProgrammeStatus(row.id, status)
-                              .then(() => listProgrammes())
-                              .then(setRows)
-                              .then(() =>
-                                toast.success("Programme status updated."),
-                              )
-                              .catch((reason) =>
-                                toast.error(describeError(reason)),
-                              );
-                          }}
-                        >
-                          <option value="DRAFT">Draft</option>
-                          <option value="OPEN">Open</option>
-                          <option value="CLOSED">Closed</option>
-                          <option value="ARCHIVED">Archived</option>
-                        </select>
-                      ) : null}
-                    </div>
+                    <RowMenu
+                      label={`Actions for ${row.name}`}
+                      items={[
+                        ...(canAllocate
+                          ? [
+                              {
+                                label: "Eligible",
+                                onSelect: () => {
+                                  if (!row.id) {
+                                    toast.error(
+                                      "This programme has no identifier.",
+                                    );
+                                    return;
+                                  }
+                                  setEligibleFor(row.name);
+                                  void listEligible(row.id)
+                                    .then((people) =>
+                                      setEligible(
+                                        people.map(
+                                          (person) =>
+                                            person.fullName ||
+                                            person.blueId ||
+                                            person.id,
+                                        ),
+                                      ),
+                                    )
+                                    .catch((reason) =>
+                                      toast.error(describeError(reason)),
+                                    );
+                                },
+                              },
+                            ]
+                          : []),
+                        ...(canManage
+                          ? (
+                              [
+                                ["DRAFT", "Mark as draft"],
+                                ["OPEN", "Open programme"],
+                                ["CLOSED", "Close programme"],
+                                ["ARCHIVED", "Archive programme"],
+                              ] as const
+                            )
+                              .filter(([status]) => status !== row.status)
+                              .map(([status, label]) => ({
+                                label,
+                                onSelect: () => {
+                                  if (!row.id) {
+                                    toast.error(
+                                      "This programme has no identifier.",
+                                    );
+                                    return;
+                                  }
+                                  void setProgrammeStatus(row.id, status)
+                                    .then(() => listProgrammes())
+                                    .then(setRows)
+                                    .then(() =>
+                                      toast.success(
+                                        "Programme status updated.",
+                                      ),
+                                    )
+                                    .catch((reason) =>
+                                      toast.error(describeError(reason)),
+                                    );
+                                },
+                              }))
+                          : []),
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}

@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
   TableSkeleton,
   fieldClass,
   submitClass,
@@ -194,34 +195,33 @@ export default function CooperativesPage() {
                     {row.isActive === false ? "Inactive" : "Active"}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        className="h-9 border border-navy px-3 text-sm text-navy"
-                        onClick={() => {
-                          setMembersFor(row);
-                          void listMembers(row.id)
-                            .then(setMembers)
-                            .catch((reason) =>
-                              toast.error(describeError(reason)),
-                            );
-                        }}
-                      >
-                        Members
-                      </button>
-                      {canManage ? (
-                        <button
-                          type="button"
-                          className="h-9 border border-line px-3 text-sm text-navy"
-                          onClick={() => {
-                            setEditing(row);
-                            setEditName(row.name);
-                          }}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                    </div>
+                    <RowMenu
+                      label={`Actions for ${row.name}`}
+                      items={[
+                        {
+                          label: "Members",
+                          onSelect: () => {
+                            setMembersFor(row);
+                            void listMembers(row.id)
+                              .then(setMembers)
+                              .catch((reason) =>
+                                toast.error(describeError(reason)),
+                              );
+                          },
+                        },
+                        ...(canManage
+                          ? [
+                              {
+                                label: "Edit",
+                                onSelect: () => {
+                                  setEditing(row);
+                                  setEditName(row.name);
+                                },
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -275,22 +275,27 @@ export default function CooperativesPage() {
                     {member.fullName ||
                       `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()}
                   </span>
-                  {canManage ? (
-                    <button
-                      type="button"
-                      className="text-sm text-navy underline"
-                      onClick={() => {
-                        void removeMember(membersFor.id, member.id)
-                          .then(() => listMembers(membersFor.id))
-                          .then(setMembers)
-                          .catch((reason) =>
-                            toast.error(describeError(reason)),
-                          );
-                      }}
-                    >
-                      Remove
-                    </button>
-                  ) : null}
+                  <RowMenu
+                    label="Member actions"
+                    items={
+                      canManage
+                        ? [
+                            {
+                              label: "Remove",
+                              danger: true,
+                              onSelect: () => {
+                                void removeMember(membersFor.id, member.id)
+                                  .then(() => listMembers(membersFor.id))
+                                  .then(setMembers)
+                                  .catch((reason) =>
+                                    toast.error(describeError(reason)),
+                                  );
+                              },
+                            },
+                          ]
+                        : []
+                    }
+                  />
                 </li>
               ))
             )}

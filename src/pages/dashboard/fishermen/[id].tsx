@@ -10,6 +10,8 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
+  type RowMenuItem,
   TableSkeleton,
   fieldClass,
   submitClass,
@@ -170,13 +172,93 @@ export default function FishermanPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeading
-        kicker="Register"
-        title={loading ? "Fisherman" : name}
-        text={
-          row?.blueId || "No Blue ID until an officer verifies this record."
-        }
-      />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeading
+          kicker="Register"
+          title={loading ? "Fisherman" : name}
+          text={
+            row?.blueId || "No Blue ID until an officer verifies this record."
+          }
+        />
+        {row && !loading ? (
+          <RowMenu
+            label={`Actions for ${name}`}
+            items={
+              [
+                canEdit
+                  ? {
+                      label: "Edit record",
+                      onSelect: () => setEditing(true),
+                    }
+                  : null,
+                canDelete
+                  ? {
+                      label: "Withdraw record",
+                      danger: true,
+                      onSelect: () => {
+                        setReason("");
+                        setWithdrawOpen(true);
+                      },
+                    }
+                  : null,
+                canReissue && !row.blueId
+                  ? {
+                      label: "Verify and issue Blue ID",
+                      onSelect: () => {
+                        if (!id || busy) return;
+                        setBusy(true);
+                        void verifyRegistration(id)
+                          .then(() => load(id))
+                          .then(() =>
+                            toast.success(
+                              "Verified. A Blue ID has been issued.",
+                            ),
+                          )
+                          .catch((reason) =>
+                            toast.error(describeError(reason)),
+                          )
+                          .finally(() => setBusy(false));
+                      },
+                    }
+                  : null,
+                canStatus
+                  ? {
+                      label: "Change status",
+                      onSelect: () => {
+                        setStatus(
+                          row.status && row.blueId ? row.status : "SUSPENDED",
+                        );
+                        setReason("");
+                        setStatusOpen(true);
+                      },
+                    }
+                  : null,
+                canReissue && row.blueId
+                  ? {
+                      label: "Reissue card",
+                      onSelect: () => {
+                        setReason("");
+                        setReissueOpen(true);
+                      },
+                    }
+                  : null,
+                row.blueId
+                  ? {
+                      label: "Card QR",
+                      onSelect: () => {
+                        void fishermanQr(id)
+                          .then(setQr)
+                          .catch((reason) =>
+                            toast.error(describeError(reason)),
+                          );
+                      },
+                    }
+                  : null,
+              ].filter((item) => item !== null) as RowMenuItem[]
+            }
+          />
+        ) : null}
+      </div>
       <Link
         href="/dashboard/fishermen"
         className="inline-flex text-sm text-navy underline decoration-navy/30 underline-offset-4"
@@ -187,84 +269,6 @@ export default function FishermanPage() {
       {loading ? <TableSkeleton rows={4} columns={2} /> : null}
       {row && !loading ? (
         <>
-          <div className="flex flex-wrap gap-2">
-            {canEdit ? (
-              <button
-                type="button"
-                className={submitClass}
-                onClick={() => setEditing(true)}
-              >
-                Edit record
-              </button>
-            ) : null}
-            {canDelete ? (
-              <button
-                type="button"
-                className="h-11 border border-[#8C2F2F] px-5 text-sm text-[#8C2F2F]"
-                onClick={() => {
-                  setReason("");
-                  setWithdrawOpen(true);
-                }}
-              >
-                Withdraw record
-              </button>
-            ) : null}
-            {canReissue && !row.blueId ? (
-              <button
-                type="button"
-                className={submitClass}
-                onClick={() => {
-                  if (!id || busy) return;
-                  setBusy(true);
-                  void verifyRegistration(id)
-                    .then(() => load(id))
-                    .then(() =>
-                      toast.success("Verified. A Blue ID has been issued."),
-                    )
-                    .catch((reason) => toast.error(describeError(reason)))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                Verify and issue Blue ID
-              </button>
-            ) : null}
-            {canStatus ? (
-              <button
-                type="button"
-                className="h-11 border border-navy px-5 text-sm text-navy"
-                onClick={() => {
-                  setStatus(
-                    row.status && row.blueId ? row.status : "SUSPENDED",
-                  );
-                  setStatusOpen(true);
-                }}
-              >
-                Change status
-              </button>
-            ) : null}
-            {canReissue && row.blueId ? (
-              <button
-                type="button"
-                className="h-11 border border-navy px-5 text-sm text-navy"
-                onClick={() => setReissueOpen(true)}
-              >
-                Reissue card
-              </button>
-            ) : null}
-            {row.blueId ? (
-              <button
-                type="button"
-                className="h-11 border border-line px-5 text-sm text-navy"
-                onClick={() => {
-                  void fishermanQr(id)
-                    .then(setQr)
-                    .catch((reason) => toast.error(describeError(reason)));
-                }}
-              >
-                Card QR
-              </button>
-            ) : null}
-          </div>
           <Panel title="Record">
             <dl className="grid gap-4 p-5 text-sm sm:grid-cols-2">
               {[

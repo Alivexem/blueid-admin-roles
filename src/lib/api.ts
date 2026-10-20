@@ -432,9 +432,10 @@ export async function changePassword(
 }
 
 export async function listUsers(query?: { page?: number; search?: string }) {
-  return api<Operator[]>("GET", "/users", {
+  const result = await api<Operator[]>("GET", "/users", {
     query: { limit: 50, page: query?.page, search: query?.search },
   });
+  return { ...result, data: rowsWithId(result.data) };
 }
 
 export async function createUser(body: {
@@ -544,6 +545,11 @@ export type CommunityRow = {
   name: string;
   lga: string;
   estimatedFishermen?: number;
+  stats?: {
+    registeredFishermen?: number;
+    registeredBoats?: number;
+    registeredEngines?: number;
+  };
   facilities?: Record<string, unknown>;
   landingSites?: unknown[];
   isActive?: boolean;
@@ -553,7 +559,7 @@ export async function listCommunities() {
   const { data } = await api<CommunityRow[]>("GET", "/communities", {
     query: { limit: 100 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 export type CooperativeRow = {
@@ -570,7 +576,7 @@ export async function listCooperatives() {
   const { data } = await api<CooperativeRow[]>("GET", "/cooperatives", {
     query: { limit: 100 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 export async function createCommunity(body: {
@@ -605,11 +611,29 @@ export type ProgrammeRow = {
   targetBeneficiaries?: number;
 };
 
+function idFrom(record: { id?: unknown; _id?: unknown }) {
+  const raw = record.id || record._id;
+  if (typeof raw === "string" && raw) return raw;
+  if (raw && typeof raw === "object" && "$oid" in raw) {
+    return String((raw as { $oid?: string }).$oid ?? "");
+  }
+  return "";
+}
+
+function rowsWithId<T extends { id?: unknown; _id?: unknown }>(
+  rows: T[] | null | undefined,
+) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    ...row,
+    id: idFrom(row),
+  }));
+}
+
 export async function listProgrammes() {
   const { data } = await api<ProgrammeRow[]>("GET", "/programmes", {
     query: { limit: 100 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 const PROGRAMME_TYPES = [
@@ -671,13 +695,7 @@ function fishermanFrom(value: unknown): FishermanRow {
     value && typeof value === "object" ? value : {}
   ) as FishermanEnvelope;
   const source = record.fisherman ?? record;
-  const raw = source.id || record._id || source._id;
-  const id =
-    typeof raw === "string"
-      ? raw
-      : raw && typeof raw === "object" && "$oid" in raw
-        ? String((raw as { $oid?: string }).$oid ?? "")
-        : "";
+  const id = idFrom(source) || idFrom(record);
   return { ...source, id };
 }
 
@@ -771,7 +789,7 @@ export async function listBoats() {
   const { data } = await api<BoatRow[]>("GET", "/boats", {
     query: { limit: 100 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 export async function createBoat(body: Record<string, unknown>) {
@@ -793,7 +811,7 @@ export async function listEngines() {
   const { data } = await api<EngineRow[]>("GET", "/engines", {
     query: { limit: 100 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 export async function createEngine(body: Record<string, unknown>) {
@@ -847,9 +865,10 @@ export type AllocationRow = {
 };
 
 export async function listAllocations() {
-  return api<AllocationRow[]>("GET", "/programmes/allocations", {
+  const result = await api<AllocationRow[]>("GET", "/programmes/allocations", {
     query: { limit: 50 },
   });
+  return { ...result, data: rowsWithId(result.data) };
 }
 
 export async function deliverAllocation(id: string) {
@@ -880,7 +899,7 @@ export async function listDevices() {
   const { data } = await api<DeviceRow[]>("GET", "/sync/devices", {
     query: { limit: 100 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 export async function enrolDevice(body: {
@@ -913,7 +932,7 @@ export async function listBatches() {
   const { data } = await api<BatchRow[]>("GET", "/sync/batches", {
     query: { limit: 50 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 export async function listSessions() {
@@ -1108,7 +1127,7 @@ export async function listMembers(id: string) {
     "GET",
     `/cooperatives/${id}/members`,
   );
-  return data;
+  return (Array.isArray(data) ? data : []).map(fishermanFrom);
 }
 
 export async function addMember(
@@ -1141,7 +1160,7 @@ export async function listEligible(programmeId: string) {
     "GET",
     `/programmes/${programmeId}/eligible`,
   );
-  return data;
+  return (Array.isArray(data) ? data : []).map(fishermanFrom);
 }
 
 export type EquipmentRow = {
@@ -1156,7 +1175,7 @@ export async function listEquipments() {
   const { data } = await api<EquipmentRow[]>("GET", "/equipments", {
     query: { limit: 100 },
   });
-  return data;
+  return rowsWithId(data);
 }
 
 export async function updateBoat(id: string, body: Record<string, unknown>) {

@@ -9,6 +9,7 @@ import {
   Modal,
   PageHeading,
   Panel,
+  RowMenu,
   TableSkeleton,
   fieldClass,
   submitClass,
@@ -185,24 +186,30 @@ export default function CommunitiesPage() {
                     {lgaName(row.lga)}
                   </td>
                   <td className="px-4 py-3 text-navy">
-                    {row.estimatedFishermen ?? "—"}
+                    {row.stats?.registeredFishermen ??
+                      row.estimatedFishermen ??
+                      0}
                   </td>
-                  <td className="px-4 py-3">{facility(row, "landing")}</td>
+                  <td className="px-4 py-3">{facility(row, "landingSite")}</td>
                   <td className="px-4 py-3">{facility(row, "coldStorage")}</td>
                   <td className="px-4 py-3">{facility(row, "boatRepair")}</td>
                   <td className="px-4 py-3 text-right">
-                    {canManage ? (
-                      <button
-                        type="button"
-                        className="h-9 border border-navy px-3 text-sm text-navy"
-                        onClick={() => {
-                          setEditing(row);
-                          setEditName(row.name);
-                        }}
-                      >
-                        Edit
-                      </button>
-                    ) : null}
+                    <RowMenu
+                      label={`Actions for ${row.name}`}
+                      items={
+                        canManage
+                          ? [
+                              {
+                                label: "Edit",
+                                onSelect: () => {
+                                  setEditing(row);
+                                  setEditName(row.name);
+                                },
+                              },
+                            ]
+                          : []
+                      }
+                    />
                   </td>
                 </tr>
               ))}
@@ -216,7 +223,7 @@ export default function CommunitiesPage() {
             className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (tidyText(editName).length < 2 || busy) return;
+              if (tidyText(editName).length < 2 || !editing.id || busy) return;
               setBusy(true);
               void updateCommunity(editing.id, { name: tidyText(editName) })
                 .then(() => listCommunities())

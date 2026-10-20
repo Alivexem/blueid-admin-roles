@@ -4,7 +4,8 @@ import {
   type ComponentProps,
   type ReactNode,
 } from "react";
-import { Eye, EyeOff, X } from "lucide-react";
+import Link from "next/link";
+import { Eye, EyeOff, MoreHorizontal, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -166,6 +167,99 @@ export function EmptyState({ title, text }: { title: string; text: string }) {
         {text}
       </p>
     </div>
+  );
+}
+
+export type RowMenuItem = {
+  label: string;
+  onSelect?: () => void;
+  href?: string;
+  danger?: boolean;
+};
+
+export function RowMenu({
+  label,
+  items,
+}: {
+  label: string;
+  items: RowMenuItem[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+  if (items.length === 0) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="grid size-9 place-items-center rounded-[8px] text-navy hover:bg-stone"
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={(event) => {
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          setPos({
+            top: rect.bottom + 6,
+            right: window.innerWidth - rect.right,
+          });
+          setOpen(true);
+        }}
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40 cursor-default"
+            aria-label="Close actions"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="menu"
+            className="fixed z-50 w-56 overflow-hidden rounded-[8px] border border-line bg-white shadow-[0_8px_24px_rgba(10,76,154,0.08)]"
+            style={{ top: pos.top, right: pos.right }}
+          >
+            {items.map((item) => {
+              const className = `block w-full px-4 py-2.5 text-left text-sm hover:bg-stone ${
+                item.danger ? "text-[#8C2F2F]" : "text-navy"
+              }`;
+              if (item.href) {
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    role="menuitem"
+                    className={className}
+                    onClick={() => setOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              }
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  className={className}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onSelect?.();
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+    </>
   );
 }
 

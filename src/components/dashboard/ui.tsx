@@ -5,7 +5,14 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { Eye, EyeOff, MoreHorizontal, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  Eye,
+  EyeOff,
+  MoreHorizontal,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -38,28 +45,59 @@ export function PageHeading({
 export function StatCard({
   label,
   value,
+  href,
+  icon: Icon,
 }: {
   label: string;
   value: number | string;
+  href?: string;
+  icon?: LucideIcon;
 }) {
-  return (
-    <article className="rounded-[8px] border border-line bg-white px-5 py-4">
-      <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+  const content = (
+    <>
+      <div className="flex items-start gap-3">
+        {Icon ? (
+          <span className="grid size-9 shrink-0 place-items-center rounded-[8px] bg-navy/8 text-navy">
+            <Icon className="size-5" />
+          </span>
+        ) : null}
+        {href ? (
+          <ArrowUpRight className="ml-auto size-4 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-navy" />
+        ) : null}
+      </div>
+      <p className="mt-3 text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
         {label}
       </p>
-      <p className="mt-2 font-serif text-3xl tracking-[-0.03em] text-navy">
+      <p className="mt-1 font-serif text-3xl tracking-[-0.03em] text-navy">
         {value}
       </p>
+    </>
+  );
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group block rounded-[8px] border border-line bg-white px-5 py-4 transition-all hover:border-navy/30 hover:shadow-[0_4px_16px_rgba(10,76,154,0.08)]"
+      >
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <article className="rounded-[8px] border border-line bg-white px-5 py-4">
+      {content}
     </article>
   );
 }
 
 export function Panel({
   title,
+  icon: Icon,
   children,
   className,
 }: {
   title?: string;
+  icon?: LucideIcon;
   children: ReactNode;
   className?: string;
 }) {
@@ -71,7 +109,8 @@ export function Panel({
       )}
     >
       {title ? (
-        <h2 className="border-b border-line px-5 py-3 text-sm font-medium text-navy">
+        <h2 className="flex items-center gap-2 border-b border-line px-5 py-3 text-sm font-medium text-navy">
+          {Icon ? <Icon className="size-4 text-navy/70" /> : null}
           {title}
         </h2>
       ) : null}

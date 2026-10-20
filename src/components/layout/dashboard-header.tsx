@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
-import { ChevronDown, Menu, Search, X } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 
 import { Logo } from "@/components/layout/logo";
 import {
@@ -14,7 +14,6 @@ import {
 } from "@/lib/api";
 import { roleMeta } from "@/lib/dashboard";
 import { useSessionStore } from "@/store/useSessionStore";
-import { cn } from "@/lib/utils";
 
 function initials(name: string) {
   return name
@@ -130,15 +129,7 @@ export function DashboardHeader({ onMenu }: { onMenu: () => void }) {
   }, [profile?.roleId, query, searching]);
 
   return (
-    <header className="flex h-16 items-center gap-3 border-b border-line bg-white px-4 sm:px-6">
-      <button
-        type="button"
-        className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-navy md:hidden"
-        aria-label="Open menu"
-        onClick={onMenu}
-      >
-        <Menu className="size-4" />
-      </button>
+    <header className="flex min-h-16 items-center gap-3 border-b border-line bg-white px-4 pt-[env(safe-area-inset-top)] sm:px-6">
       <Logo className="md:hidden" />
       <div ref={menuRef} className="relative ml-auto flex items-center gap-1">
         <button
@@ -166,12 +157,6 @@ export function DashboardHeader({ onMenu }: { onMenu: () => void }) {
           <span className="hidden text-sm font-medium text-navy sm:block">
             {name}
           </span>
-          <ChevronDown
-            className={cn(
-              "size-4 text-navy transition-transform",
-              open && "rotate-180",
-            )}
-          />
         </button>
         {open ? (
           <div
@@ -191,6 +176,14 @@ export function DashboardHeader({ onMenu }: { onMenu: () => void }) {
           </div>
         ) : null}
       </div>
+      <button
+        type="button"
+        className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-navy md:hidden"
+        aria-label="Open menu"
+        onClick={onMenu}
+      >
+        <Menu className="size-4" />
+      </button>
       {searching ? (
         <div className="fixed inset-0 z-[70] flex flex-col bg-white">
           <div className="flex h-16 items-center gap-3 border-b border-line px-4 sm:px-6">

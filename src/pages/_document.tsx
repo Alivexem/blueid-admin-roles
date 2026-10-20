@@ -7,6 +7,10 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
         <meta name="description" content={APP_DESCRIPTION} />
         <meta name="theme-color" content="#0A4C9A" />
         <meta property="og:title" content={`${APP_NAME} · Cross River State`} />

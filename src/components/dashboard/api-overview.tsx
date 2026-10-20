@@ -1,7 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import {
+  Anchor,
+  BadgeCheck,
+  BarChart3,
+  Building2,
+  ChevronRight,
+  Clock3,
+  Cog,
+  Copy,
+  Gift,
+  PieChart as PieChartIcon,
+  Ship,
+  Users,
+  Waves,
+  type LucideIcon,
+} from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -15,12 +31,7 @@ import {
   YAxis,
 } from "recharts";
 
-import {
-  PageHeading,
-  Panel,
-  StatCard,
-  StatSkeleton,
-} from "@/components/dashboard/ui";
+import { PageHeading, StatCard, StatSkeleton } from "@/components/dashboard/ui";
 import {
   dashboardCapacity,
   dashboardCommunities,
@@ -30,13 +41,17 @@ import {
   describeError,
   infrastructureGaps,
   lgaName,
-  listAudit,
+  listAllocations,
+  listCooperatives,
+  listProgrammes,
   listUsers,
   toRoleId,
-  type AuditRow,
+  type AllocationRow,
+  type CooperativeRow,
+  type ProgrammeRow,
 } from "@/lib/api";
-import { auditLines } from "@/lib/audit-copy";
 import { roleMeta, ROLES, type RoleId } from "@/lib/dashboard";
+import { cn } from "@/lib/utils";
 import { useSessionStore } from "@/store/useSessionStore";
 
 const COLORS = [
@@ -48,34 +63,68 @@ const COLORS = [
   "#3E7A4A",
 ];
 
-const HEADLINES: { label: string; keys: string[] }[] = [
+const HEADLINES: {
+  label: string;
+  keys: string[];
+  href: string;
+  icon: LucideIcon;
+}[] = [
   {
     label: "Fishermen",
     keys: ["totalRegistered", "registeredFishermen", "fishermen"],
+    href: "/dashboard/fishermen",
+    icon: Users,
   },
   {
     label: "Verified",
     keys: ["verified", "verifiedFishermen", "verifiedCount"],
+    href: "/dashboard/fishermen",
+    icon: BadgeCheck,
   },
   {
     label: "Awaiting verification",
     keys: ["pendingVerification", "awaitingVerification", "pending"],
+    href: "/dashboard/verify",
+    icon: Clock3,
   },
   {
     label: "Under review",
     keys: ["duplicateUnderReview", "duplicates", "flagged"],
+    href: "/dashboard/duplicates",
+    icon: Copy,
   },
-  { label: "Boats", keys: ["boats", "totalBoats"] },
-  { label: "Engines", keys: ["engines", "totalEngines"] },
+  {
+    label: "Boats",
+    keys: ["boats", "totalBoats"],
+    href: "/dashboard/boats",
+    icon: Ship,
+  },
+  {
+    label: "Engines",
+    keys: ["engines", "totalEngines"],
+    href: "/dashboard/boats",
+    icon: Cog,
+  },
   {
     label: "Cooperative members",
     keys: ["cooperativeMembers", "members"],
+    href: "/dashboard/cooperatives",
+    icon: Building2,
   },
   {
     label: "Benefits delivered",
     keys: ["interventionsDelivered", "delivered", "deliveredCount"],
+    href: "/dashboard/allocations",
+    icon: Gift,
   },
 ];
+
+const HEADLINE_HREFS = new Map(
+  HEADLINES.map((item) => [item.label, item.href]),
+);
+const HEADLINE_ICONS = new Map(
+  HEADLINES.map((item) => [item.label, item.icon]),
+);
 
 type Slice = { name: string; value: number };
 type Bars = { name: string; registered: number; verified: number };
@@ -201,20 +250,37 @@ function programmesFrom(value: unknown): ProgrammeLine[] {
     .slice(0, 6);
 }
 
+function allocationPerson(row: AllocationRow) {
+  if (row.fishermanName) return row.fishermanName;
+  if (row.fisherman && typeof row.fisherman === "object") {
+    return row.fisherman.fullName || row.fisherman.blueId || "Fisherman";
+  }
+  return row.blueId || "Fisherman";
+}
+
+function allocationProgramme(row: AllocationRow) {
+  if (row.programmeName) return row.programmeName;
+  if (row.programme && typeof row.programme === "object") {
+    return row.programme.name || "Programme";
+  }
+  return "Programme";
+}
+
+type Gap = { title: string; gap: string; lga: string };
+
 function gapsFrom(value: unknown) {
-  if (!isRecord(value)) return [] as { title: string; detail: string }[];
-  const rows: { title: string; detail: string }[] = [];
+  if (!isRecord(value)) return [] as Gap[];
+  const rows: Gap[] = [];
   for (const [key, item] of Object.entries(value)) {
     if (!Array.isArray(item)) continue;
     for (const entry of item.slice(0, 3)) {
       if (typeof entry === "string") {
-        rows.push({ title: entry, detail: titleCase(key) });
+        rows.push({ title: entry, gap: titleCase(key), lga: "" });
       } else if (isRecord(entry)) {
-        const place = String(entry.name || entry.community || "Community");
-        const lga = typeof entry.lga === "string" ? lgaName(entry.lga) : "";
         rows.push({
-          title: place,
-          detail: [titleCase(key), lga].filter(Boolean).join(" · "),
+          title: String(entry.name || entry.community || "Community"),
+          gap: titleCase(key),
+          lga: typeof entry.lga === "string" ? lgaName(entry.lga) : "",
         });
       }
     }
@@ -222,19 +288,52 @@ function gapsFrom(value: unknown) {
   return rows.slice(0, 6);
 }
 
+function initials(name: string) {
+  const letters = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("");
+  return letters.toUpperCase() || "—";
+}
+
+const GOOD = ["DELIVERED", "APPROVED", "ACTIVE", "VERIFIED", "COMPLETED"];
+const BAD = ["REJECTED", "REVOKED", "CANCELLED", "CLOSED", "SUSPENDED"];
+
+function statusLabel(status: string) {
+  const text = status.replace(/_/g, " ").toLowerCase();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function statusTone(status: string) {
+  const value = status.toUpperCase();
+  if (GOOD.includes(value)) return "bg-[#3E7A4A]/10 text-[#3E7A4A]";
+  if (BAD.includes(value)) return "bg-[#8C2F2F]/10 text-[#8C2F2F]";
+  return "bg-[#8C6A2F]/10 text-[#8C6A2F]";
+}
+
 export function ApiOverview() {
   const profile = useSessionStore((state) => state.profile);
   const role = profile?.roleId ?? "state";
-  const canAudit =
-    profile?.permissions?.granted?.includes("audit:read") ?? false;
-  const [cards, setCards] = useState<{ label: string; value: number }[]>([]);
+  const granted = profile?.permissions?.granted ?? [];
+  const canAllocations = ["benefit:allocate", "benefit:deliver", "benefit:approve"].some(
+    (permission) => granted.includes(permission),
+  );
+  const [cards, setCards] = useState<
+    { label: string; value: number; href?: string; icon?: LucideIcon }[]
+  >([]);
   const [pie, setPie] = useState<Slice[]>([]);
   const [bars, setBars] = useState<Bars[]>([]);
   const [barTitle, setBarTitle] = useState("Registrations");
   const [programmes, setProgrammes] = useState<ProgrammeLine[]>([]);
-  const [gaps, setGaps] = useState<{ title: string; detail: string }[]>([]);
+  const [gaps, setGaps] = useState<Gap[]>([]);
   const [officers, setOfficers] = useState<Slice[]>([]);
-  const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [allocations, setAllocations] = useState<AllocationRow[]>([]);
+  const [cooperatives, setCooperatives] = useState<CooperativeRow[]>([]);
+  const [recentProgrammes, setRecentProgrammes] = useState<ProgrammeRow[]>(
+    [],
+  );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
@@ -256,11 +355,13 @@ export function ApiOverview() {
       dashboardCommunities().catch(() => null),
       dashboardProgrammeStats().catch(() => null),
       infrastructureGaps().catch(() => null),
-      canAudit
-        ? listAudit()
-            .then((result) => result.data.slice(0, 5))
-            .catch(() => [] as AuditRow[])
-        : Promise.resolve([] as AuditRow[]),
+      listProgrammes().catch(() => [] as ProgrammeRow[]),
+      listCooperatives().catch(() => [] as CooperativeRow[]),
+      canAllocations
+        ? listAllocations()
+            .then((result) => result.data)
+            .catch(() => [] as AllocationRow[])
+        : Promise.resolve([] as AllocationRow[]),
       role === "super"
         ? listUsers()
             .then((result) => result.data)
@@ -275,13 +376,22 @@ export function ApiOverview() {
           communities,
           programmeRows,
           gapRows,
-          activity,
+          recentProgrammeRows,
+          cooperativeRows,
+          allocationRows,
           accounts,
         ]) => {
           if (!live) return;
-          const nextCards = HEADLINES.flatMap((item) => {
+          const nextCards: {
+            label: string;
+            value: number;
+            href?: string;
+            icon?: LucideIcon;
+          }[] = HEADLINES.flatMap((item) => {
             const value = readNumber(summary, item.keys);
-            return value === null ? [] : [{ label: item.label, value }];
+            return value === null
+              ? []
+              : [{ label: item.label, value, href: item.href, icon: item.icon }];
           });
           if (nextCards.length === 0 && isRecord(summary)) {
             const skip = new Set([
@@ -341,7 +451,9 @@ export function ApiOverview() {
           }
           setProgrammes(programmesFrom(programmeRows));
           setGaps(gapsFrom(gapRows));
-          setAudit(activity);
+          setRecentProgrammes(recentProgrammeRows.slice(0, 4));
+          setCooperatives(cooperativeRows.slice(0, 4));
+          setAllocations(allocationRows.slice(0, 4));
           const counts = new Map<RoleId, number>();
           for (const account of accounts) {
             const id = toRoleId(account.role);
@@ -361,7 +473,7 @@ export function ApiOverview() {
     return () => {
       live = false;
     };
-  }, [canAudit, role]);
+  }, [canAllocations, role]);
 
   return (
     <div className="space-y-6">
@@ -380,7 +492,13 @@ export function ApiOverview() {
           Array.from({ length: 4 }, (_, index) => <StatSkeleton key={index} />)
         ) : cards.length ? (
           cards.map((item) => (
-            <StatCard key={item.label} label={item.label} value={item.value} />
+            <StatCard
+              key={item.label}
+              label={item.label}
+              value={item.value}
+              href={item.href ?? HEADLINE_HREFS.get(item.label)}
+              icon={item.icon ?? HEADLINE_ICONS.get(item.label)}
+            />
           ))
         ) : (
           <p className="text-sm text-muted-foreground sm:col-span-2">
@@ -390,7 +508,8 @@ export function ApiOverview() {
       </div>
       <div className="grid gap-3 lg:grid-cols-5">
         <section className="rounded-[8px] border border-line bg-white lg:col-span-3">
-          <h2 className="border-b border-line px-5 py-3 text-sm font-medium text-navy">
+          <h2 className="flex items-center gap-2 border-b border-line px-5 py-3 text-sm font-medium text-navy">
+            <BarChart3 className="size-4 text-navy/70" />
             {barTitle}
           </h2>
           <div className="h-72 px-2 py-4">
@@ -433,7 +552,8 @@ export function ApiOverview() {
           </div>
         </section>
         <section className="rounded-[8px] border border-line bg-white lg:col-span-2">
-          <h2 className="border-b border-line px-5 py-3 text-sm font-medium text-navy">
+          <h2 className="flex items-center gap-2 border-b border-line px-5 py-3 text-sm font-medium text-navy">
+            <PieChartIcon className="size-4 text-navy/70" />
             {role === "super" && officers.length ? "Officers" : "Register mix"}
           </h2>
           <div className="h-72 px-2 py-4">
@@ -472,99 +592,231 @@ export function ApiOverview() {
         </section>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Programmes">
+        <OverviewCard
+          title="Programme delivery"
+          icon={Anchor}
+          href="/dashboard/programmes"
+        >
           {programmes.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">
-              No programme totals yet.
-            </p>
+            <OverviewEmpty text="No programme totals yet." />
           ) : (
-            <ul>
-              {programmes.map((item) => (
-                <li
-                  key={item.name}
-                  className="flex items-baseline justify-between gap-4 border-t border-line px-5 py-3 text-sm first:border-t-0"
-                >
-                  <span className="text-navy">{item.name}</span>
-                  <span className="text-muted-foreground">
-                    {item.delivered} delivered · {item.allocated} allocated
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link
-            href="/dashboard/programmes"
-            className="block border-t border-line px-5 py-3 text-sm text-navy underline decoration-navy/30 underline-offset-4"
-          >
-            Open programmes
-          </Link>
-        </Panel>
-        <Panel title="Communities still short of facilities">
-          {gaps.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">
-              No facility gaps were returned.
-            </p>
-          ) : (
-            <ul>
-              {gaps.map((item) => (
-                <li
-                  key={`${item.title}-${item.detail}`}
-                  className="border-t border-line px-5 py-3 text-sm first:border-t-0"
-                >
-                  <p className="text-navy">{item.title}</p>
-                  <p className="mt-1 text-muted-foreground">{item.detail}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link
-            href="/dashboard/communities"
-            className="block border-t border-line px-5 py-3 text-sm text-navy underline decoration-navy/30 underline-offset-4"
-          >
-            Open communities
-          </Link>
-        </Panel>
-      </div>
-      {canAudit ? (
-        <Panel title="Recent activity">
-          {audit.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">
-              No recent activity.
-            </p>
-          ) : (
-            <ul>
-              {audit.map((entry) => {
-                const line = auditLines(entry);
+            <ul className="space-y-4">
+              {programmes.map((item) => {
+                const share = item.allocated
+                  ? Math.min(100, (item.delivered / item.allocated) * 100)
+                  : 0;
                 return (
-                  <li
-                    key={entry.id}
-                    className="border-t border-line px-5 py-3 text-sm first:border-t-0"
-                  >
-                    <p className="text-navy">
-                      {line.who}
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {line.what}
+                  <li key={item.name}>
+                    <div className="flex items-baseline justify-between gap-3 text-sm">
+                      <span className="truncate text-navy">{item.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {item.delivered} of {item.allocated} delivered
                       </span>
-                    </p>
-                    {line.detail ? (
-                      <p className="mt-1 text-muted-foreground">
-                        {line.detail}
-                      </p>
-                    ) : null}
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone">
+                      <div
+                        className="h-full rounded-full bg-navy"
+                        style={{ width: `${share}%` }}
+                      />
+                    </div>
                   </li>
                 );
               })}
             </ul>
           )}
-          <Link
-            href="/dashboard/audit"
-            className="block border-t border-line px-5 py-3 text-sm text-navy underline decoration-navy/30 underline-offset-4"
+        </OverviewCard>
+        <OverviewCard
+          title="Communities short of facilities"
+          icon={Waves}
+          href="/dashboard/communities"
+        >
+          {gaps.length === 0 ? (
+            <OverviewEmpty text="No facility gaps were returned." />
+          ) : (
+            <ul className="-mx-2 space-y-1">
+              {gaps.map((item) => (
+                <OverviewRow
+                  key={`${item.title}-${item.gap}`}
+                  href="/dashboard/communities"
+                  title={item.title}
+                  detail={item.lga}
+                  badge={item.gap}
+                />
+              ))}
+            </ul>
+          )}
+        </OverviewCard>
+      </div>
+      <div
+        className={cn(
+          "grid gap-3",
+          canAllocations ? "lg:grid-cols-3" : "lg:grid-cols-2",
+        )}
+      >
+        {canAllocations ? (
+          <OverviewCard
+            title="Recent allocations"
+            icon={Gift}
+            href="/dashboard/allocations"
           >
-            Open the audit trail
-          </Link>
-        </Panel>
-      ) : null}
+            {allocations.length === 0 ? (
+              <OverviewEmpty text="No allocations yet." />
+            ) : (
+              <ul className="-mx-2 space-y-1">
+                {allocations.map((item) => (
+                  <OverviewRow
+                    key={item.id}
+                    href="/dashboard/allocations"
+                    title={allocationPerson(item)}
+                    detail={allocationProgramme(item)}
+                    status={item.status}
+                  />
+                ))}
+              </ul>
+            )}
+          </OverviewCard>
+        ) : null}
+        <OverviewCard
+          title="Recent cooperatives"
+          icon={Building2}
+          href="/dashboard/cooperatives"
+        >
+          {cooperatives.length === 0 ? (
+            <OverviewEmpty text="No cooperatives yet." />
+          ) : (
+            <ul className="-mx-2 space-y-1">
+              {cooperatives.map((item) => (
+                <OverviewRow
+                  key={item.id}
+                  href="/dashboard/cooperatives"
+                  title={item.name}
+                  detail={[
+                    lgaName(item.lga),
+                    typeof item.memberCount === "number"
+                      ? `${item.memberCount} members`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                />
+              ))}
+            </ul>
+          )}
+        </OverviewCard>
+        <OverviewCard
+          title="Recent programmes"
+          icon={Anchor}
+          href="/dashboard/programmes"
+        >
+          {recentProgrammes.length === 0 ? (
+            <OverviewEmpty text="No programmes yet." />
+          ) : (
+            <ul className="-mx-2 space-y-1">
+              {recentProgrammes.map((item) => (
+                <OverviewRow
+                  key={item.id}
+                  href="/dashboard/programmes"
+                  title={item.name}
+                  detail={item.year ? String(item.year) : ""}
+                  status={item.status}
+                />
+              ))}
+            </ul>
+          )}
+        </OverviewCard>
+      </div>
     </div>
+  );
+}
+
+function OverviewCard({
+  title,
+  icon: Icon,
+  href,
+  children,
+}: {
+  title: string;
+  icon: LucideIcon;
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[8px] border border-line bg-white p-4 sm:p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="flex min-w-0 items-center gap-2.5 text-sm font-medium text-navy">
+          <span className="grid size-8 shrink-0 place-items-center rounded-[8px] bg-navy/8">
+            <Icon className="size-4" />
+          </span>
+          <span className="truncate">{title}</span>
+        </h2>
+        <Link
+          href={href}
+          className="flex shrink-0 items-center gap-0.5 rounded-[8px] px-2 py-1 text-xs font-medium text-navy/70 hover:bg-stone hover:text-navy"
+        >
+          View all
+          <ChevronRight className="size-3.5" />
+        </Link>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function OverviewRow({
+  href,
+  title,
+  detail,
+  status,
+  badge,
+}: {
+  href: string;
+  title: string;
+  detail?: string;
+  status?: string;
+  badge?: string;
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="group flex items-center gap-3 rounded-[8px] px-2 py-2 transition-colors hover:bg-stone"
+      >
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-navy/8 text-xs font-medium text-navy">
+          {initials(title)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm text-navy">{title}</span>
+          {detail ? (
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              {detail}
+            </span>
+          ) : null}
+        </span>
+        {status ? (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+              statusTone(status),
+            )}
+          >
+            {statusLabel(status)}
+          </span>
+        ) : null}
+        {badge ? (
+          <span className="shrink-0 rounded-full bg-stone px-2 py-0.5 text-[11px] font-medium text-navy">
+            {badge}
+          </span>
+        ) : null}
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-navy" />
+      </Link>
+    </li>
+  );
+}
+
+function OverviewEmpty({ text }: { text: string }) {
+  return (
+    <p className="rounded-[8px] bg-stone/60 px-4 py-6 text-center text-sm text-muted-foreground">
+      {text}
+    </p>
   );
 }

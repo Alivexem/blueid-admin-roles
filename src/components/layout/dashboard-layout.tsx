@@ -105,12 +105,13 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="fixed inset-0 z-40 md:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-navy/40"
+            className="absolute inset-0 animate-in bg-navy/40 duration-200 fade-in"
             aria-label="Close menu"
             onClick={() => setMenu(false)}
           />
-          <div className="relative h-full">
+          <div className="absolute inset-y-0 right-0 animate-in pt-[env(safe-area-inset-top)] shadow-[-8px_0_24px_rgba(10,76,154,0.12)] duration-200 slide-in-from-right bg-white">
             <DashboardSidebar
+              className="border-r-0 border-l"
               onNavigate={() => setMenu(false)}
               onClose={() => setMenu(false)}
             />

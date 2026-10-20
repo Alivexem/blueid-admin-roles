@@ -54,11 +54,13 @@ export function DashboardSidebar({
   onToggle,
   onNavigate,
   onClose,
+  className,
 }: {
   collapsed?: boolean;
   onToggle?: () => void;
   onNavigate?: () => void;
   onClose?: () => void;
+  className?: string;
 }) {
   const router = useRouter();
   const signOut = useSessionStore((state) => state.signOut);
@@ -91,6 +93,7 @@ export function DashboardSidebar({
       className={cn(
         "flex h-full flex-col border-r border-line bg-white transition-[width] duration-200",
         collapsed ? "w-[76px]" : "w-[248px]",
+        className,
       )}
     >
       <div

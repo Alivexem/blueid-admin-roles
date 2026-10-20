@@ -189,29 +189,31 @@ export function Modal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy/40 p-4 sm:items-center">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className={
-          wide
-            ? "my-6 w-full max-w-3xl rounded-[8px] border border-line bg-white"
-            : "my-6 w-full max-w-xl rounded-[8px] border border-line bg-white"
-        }
-      >
-        <div className="flex items-center justify-between border-b border-line px-5 py-3">
-          <h2 className="text-sm font-medium text-navy">{title}</h2>
-          <button
-            type="button"
-            className="grid size-8 place-items-center text-navy"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            <X className="size-4" />
-          </button>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-navy/40">
+      <div className="flex min-h-full items-start justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className={
+            wide
+              ? "my-auto w-full max-w-3xl rounded-[8px] border border-line bg-white"
+              : "my-auto w-full max-w-xl rounded-[8px] border border-line bg-white"
+          }
+        >
+          <div className="flex items-center justify-between border-b border-line px-5 py-3">
+            <h2 className="text-sm font-medium text-navy">{title}</h2>
+            <button
+              type="button"
+              className="grid size-8 place-items-center text-navy"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="p-5">{children}</div>
         </div>
-        <div className="p-5">{children}</div>
       </div>
     </div>
   );

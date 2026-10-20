@@ -25,8 +25,11 @@ import {
   ownerAssets,
   reissueCard,
   setFishermanStatus,
+  verifyRegistration,
   signedMediaUrl,
   updateFisherman,
+  uploadFishermanPhoto,
+  withdrawFisherman,
   type FishermanRow,
 } from "@/lib/api";
 import { tidyText } from "@/lib/validation";
@@ -74,7 +77,11 @@ export default function FishermanPage() {
   const granted = useSessionStore(
     (state) => state.profile?.permissions?.granted,
   );
-  const canEdit = granted?.includes("fisherman:edit") ?? false;
+  const canEdit =
+    granted?.includes("fisherman:edit") ||
+    granted?.includes("fisherman:create") ||
+    false;
+  const canDelete = granted?.includes("fisherman:delete") ?? false;
   const canStatus = granted?.includes("registration:status") ?? false;
   const canReissue = granted?.includes("registration:verify") ?? false;
   const [row, setRow] = useState<FishermanRow | null>(null);
@@ -85,6 +92,7 @@ export default function FishermanPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [reissueOpen, setReissueOpen] = useState(false);
   const [qr, setQr] = useState("");
@@ -96,6 +104,7 @@ export default function FishermanPage() {
   const [status, setStatus] = useState("ACTIVE");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   function load(personId: string) {
     return getFisherman(personId).then((person) => {
@@ -142,6 +151,18 @@ export default function FishermanPage() {
     };
   }, [id]);
 
+  useEffect(() => {
+    const action = router.query.action;
+    if (action === "edit" && canEdit) setEditing(true);
+    if (action === "status" && canStatus) {
+      setStatus(
+        row?.status && row.status !== "ACTIVE" ? row.status : "SUSPENDED",
+      );
+      setStatusOpen(true);
+    }
+    if (action === "withdraw" && canDelete) setWithdrawOpen(true);
+  }, [router.query.action, canEdit, canStatus, canDelete, row?.status]);
+
   const name =
     row?.fullName ||
     `${row?.firstName ?? ""} ${row?.lastName ?? ""}`.trim() ||
@@ -173,14 +194,50 @@ export default function FishermanPage() {
                 className={submitClass}
                 onClick={() => setEditing(true)}
               >
-                Correct record
+                Edit record
+              </button>
+            ) : null}
+            {canDelete ? (
+              <button
+                type="button"
+                className="h-11 border border-[#8C2F2F] px-5 text-sm text-[#8C2F2F]"
+                onClick={() => {
+                  setReason("");
+                  setWithdrawOpen(true);
+                }}
+              >
+                Withdraw record
+              </button>
+            ) : null}
+            {canReissue && !row.blueId ? (
+              <button
+                type="button"
+                className={submitClass}
+                onClick={() => {
+                  if (!id || busy) return;
+                  setBusy(true);
+                  void verifyRegistration(id)
+                    .then(() => load(id))
+                    .then(() =>
+                      toast.success("Verified. A Blue ID has been issued."),
+                    )
+                    .catch((reason) => toast.error(describeError(reason)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Verify and issue Blue ID
               </button>
             ) : null}
             {canStatus ? (
               <button
                 type="button"
                 className="h-11 border border-navy px-5 text-sm text-navy"
-                onClick={() => setStatusOpen(true)}
+                onClick={() => {
+                  setStatus(
+                    row.status && row.blueId ? row.status : "SUSPENDED",
+                  );
+                  setStatusOpen(true);
+                }}
               >
                 Change status
               </button>
@@ -285,7 +342,7 @@ export default function FishermanPage() {
         </>
       ) : null}
       {editing ? (
-        <Modal title="Correct record" onClose={() => setEditing(false)}>
+        <Modal title="Edit record" onClose={() => setEditing(false)}>
           <form
             className="grid gap-4 sm:grid-cols-2"
             onSubmit={(event) => {
@@ -300,8 +357,12 @@ export default function FishermanPage() {
                 phone: phone || undefined,
                 fishermanTypes: ["ARTISANAL"],
               })
+                .then(() =>
+                  photoFile ? uploadFishermanPhoto(id, photoFile) : undefined,
+                )
                 .then(() => load(id))
                 .then(() => {
+                  setPhotoFile(null);
                   setEditing(false);
                   toast.success("Record updated.");
                 })
@@ -357,6 +418,23 @@ export default function FishermanPage() {
               />
             </Field>
             <div className="sm:col-span-2">
+              <Field label="Passport photograph">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="block w-full text-base text-navy file:mr-3 file:h-11 file:border-0 file:bg-stone file:px-3 file:text-base file:text-navy"
+                  onChange={(event) =>
+                    setPhotoFile(event.target.files?.[0] ?? null)
+                  }
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {photo
+                    ? "A photograph is already on this record. Choose a file to replace it."
+                    : "A photograph is required before a Blue ID can be issued."}
+                </p>
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
               <button type="submit" disabled={busy} className={submitClass}>
                 Save correction
               </button>
@@ -388,13 +466,21 @@ export default function FishermanPage() {
                 onChange={(event) => setStatus(event.target.value)}
                 className={fieldClass}
               >
-                {STATUSES.map((item) => (
+                {STATUSES.filter(
+                  (item) => row?.blueId || item !== "ACTIVE",
+                ).map((item) => (
                   <option key={item} value={item}>
                     {title(item)}
                   </option>
                 ))}
               </select>
             </Field>
+            {row?.blueId ? null : (
+              <p className="text-sm text-navy">
+                Active is not in this list. Use Verify and issue Blue ID. That
+                is what makes the record active.
+              </p>
+            )}
             <Field label="Reason">
               <input
                 value={reason}
@@ -408,6 +494,44 @@ export default function FishermanPage() {
               className={submitClass}
             >
               Save status
+            </button>
+          </form>
+        </Modal>
+      ) : null}
+      {withdrawOpen ? (
+        <Modal title="Withdraw record" onClose={() => setWithdrawOpen(false)}>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (tidyText(reason).length < 3 || !id || busy) return;
+              setBusy(true);
+              void withdrawFisherman(id, tidyText(reason))
+                .then(() => {
+                  toast.success("Record withdrawn.");
+                  void router.push("/dashboard/fishermen");
+                })
+                .catch((reason) => toast.error(describeError(reason)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <p className="text-sm text-navy">
+              This keeps the record for the audit and removes it from the
+              working register, along with its boats, engines, and equipment.
+            </p>
+            <Field label="Reason">
+              <input
+                value={reason}
+                onChange={(event) => setReason(tidyText(event.target.value))}
+                className={fieldClass}
+              />
+            </Field>
+            <button
+              type="submit"
+              disabled={busy || tidyText(reason).length < 3}
+              className={submitClass}
+            >
+              Withdraw
             </button>
           </form>
         </Modal>

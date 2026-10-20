@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import {
   Field,
   Modal,
-  PageHeading,
   Panel,
   fieldClass,
   submitClass,
@@ -17,6 +16,7 @@ import {
   createEngine,
   createEquipment,
   checkDuplicates,
+  ApiError,
   createFisherman,
   describeError,
   listCooperatives,
@@ -26,12 +26,9 @@ import {
 import {
   commitText,
   isFilledText,
-  isPhone,
-  isYear,
-  isYears,
+  nigerianPhone,
   ninMessage,
   phoneMessage,
-  requiredText,
   stripSpace,
   tidyText,
   yearMessage,
@@ -69,7 +66,8 @@ const BOATS = [
 ] as const;
 
 const EMPTY = {
-  name: "",
+  firstName: "",
+  lastName: "",
   sex: "MALE",
   year: "",
   phone: "",
@@ -98,13 +96,22 @@ type Issued = {
   status: string;
 };
 
-export default function RegisterPage() {
+export function RegisterFisherman({
+  open,
+  onClose,
+  onOpen,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onOpen: () => void;
+  onSaved: () => void;
+}) {
   const [form, setForm] = useState(EMPTY);
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [issued, setIssued] = useState<Issued | null>(null);
   const [busy, setBusy] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
   const [warned, setWarned] = useState(false);
   const [cooperatives, setCooperatives] = useState<CooperativeRow[]>([]);
 
@@ -113,6 +120,10 @@ export default function RegisterPage() {
       .then(setCooperatives)
       .catch(() => setCooperatives([]));
   }, []);
+
+  useEffect(() => {
+    if (!open) setWarned(false);
+  }, [open]);
 
   const set = (key: keyof typeof EMPTY, value: string) => {
     const spaceless = new Set<keyof typeof EMPTY>([
@@ -131,32 +142,25 @@ export default function RegisterPage() {
     }));
   };
 
-  const canSave =
-    isFilledText(form.name) &&
-    form.name.trim().includes(" ") &&
-    isYear(form.year) &&
-    isPhone(form.phone) &&
-    isFilledText(form.community) &&
-    isYears(form.yearsFishing) &&
-    !ninMessage(form.nin) &&
-    !phoneMessage(form.kinPhone) &&
-    !busy;
+  const [tried, setTried] = useState(false);
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
+  const missing = [
+    isFilledText(form.firstName) ? "" : "Enter the first name.",
+    isFilledText(form.lastName) ? "" : "Enter the last name.",
+    form.year.trim() ? yearMessage(form.year) : "Enter a four-digit year.",
+    form.phone.trim()
+      ? phoneMessage(form.phone)
+      : "Enter a valid Nigerian phone number, such as 08031234567.",
+    isFilledText(form.community) ? "" : "Enter the community.",
+    form.yearsFishing.trim()
+      ? yearsMessage(form.yearsFishing)
+      : "Enter the years fishing, from 0 to 80.",
+    ninMessage(form.nin),
+    phoneMessage(form.kinPhone),
+  ].filter(Boolean);
 
   return (
-    <div className="space-y-6">
-      <PageHeading
-        kicker="Field book"
-        title="Register a fisherman"
-        text="The record is saved as pending. A Blue ID is issued only after an officer verifies it."
-      />
-      <button
-        type="button"
-        className={submitClass}
-        onClick={() => setFormOpen(true)}
-      >
-        Register a fisherman
-      </button>
-
+    <>
       {issued ? (
         <Panel title="Registration saved">
           <div className="px-5 py-5">
@@ -173,6 +177,7 @@ export default function RegisterPage() {
                 setForm(EMPTY);
                 setPhoto(null);
                 setPreview(null);
+                onOpen();
               }}
             >
               Register another
@@ -180,30 +185,32 @@ export default function RegisterPage() {
           </div>
         </Panel>
       ) : null}
-      {formOpen ? (
-        <Modal
-          title="Register a fisherman"
-          wide
-          onClose={() => setFormOpen(false)}
-        >
+      {open ? (
+        <Modal title="Register a fisherman" wide onClose={onClose}>
           <form
             className="space-y-3"
             noValidate
             onSubmit={(event) => {
               event.preventDefault();
-              if (!canSave) return;
-              const parts = commitText(form.name).split(" ");
-              const firstName = parts[0];
-              const lastName = parts.slice(1).join(" ");
+              setTried(true);
+              if (missing[0]) {
+                toast.error(missing[0]);
+                return;
+              }
+              if (busy) return;
+              const firstName = commitText(form.firstName);
+              const lastName = commitText(form.lastName);
+              const phone = nigerianPhone(form.phone);
+              const kinPhone = nigerianPhone(form.kinPhone);
+              setServerErrors({});
               setBusy(true);
               void checkDuplicates({
                 firstName,
                 lastName,
                 lga: form.lga,
-                phone: stripSpace(form.phone) || undefined,
+                phone: phone || undefined,
                 estimatedYearOfBirth: Number(form.year),
               })
-                .catch(() => [])
                 .then((probe) => {
                   const matches = Array.isArray(probe) ? probe : [];
                   if (matches.length && !warned) {
@@ -218,12 +225,12 @@ export default function RegisterPage() {
                     lastName,
                     gender: form.sex,
                     estimatedYearOfBirth: Number(form.year),
-                    phone: stripSpace(form.phone),
+                    phone,
                     nin: stripSpace(form.nin) || undefined,
                     nextOfKin: commitText(form.kin)
                       ? {
                           name: commitText(form.kin),
-                          phone: stripSpace(form.kinPhone) || undefined,
+                          phone: kinPhone || undefined,
                         }
                       : undefined,
                     lga: form.lga,
@@ -239,6 +246,13 @@ export default function RegisterPage() {
                 })
                 .then(async (person) => {
                   if (!person) return;
+                  if (!person.id) {
+                    throw new ApiError(
+                      "The register saved the person without an id.",
+                      "REQUEST_FAILED",
+                      500,
+                    );
+                  }
                   if (photo) await uploadFishermanPhoto(person.id, photo);
                   if (form.boatType) {
                     await createBoat({
@@ -278,7 +292,8 @@ export default function RegisterPage() {
                       description: commitText(form.safety),
                     });
                   }
-                  setFormOpen(false);
+                  onClose();
+                  onSaved();
                   setIssued({
                     name: person.fullName || `${firstName} ${lastName}`,
                     reference: person.tempReference || person.id,
@@ -288,22 +303,52 @@ export default function RegisterPage() {
                     "Registration saved. It is waiting for verification.",
                   );
                 })
-                .catch((reason) => toast.error(describeError(reason)))
+                .catch((reason) => {
+                  const fields: Record<string, string> = {};
+                  if (reason instanceof ApiError) {
+                    for (const item of reason.details) {
+                      if (
+                        typeof item === "string" ||
+                        !item.message ||
+                        !item.field
+                      )
+                        continue;
+                      fields[item.field] = item.message;
+                    }
+                  }
+                  setServerErrors(fields);
+                  toast.error(describeError(reason));
+                })
                 .finally(() => setBusy(false));
             }}
           >
             <Panel title="Identity">
               <div className="grid gap-4 p-5 sm:grid-cols-2">
                 <Field
-                  label="Full name"
-                  error={requiredText(
-                    form.name,
-                    "Enter the first and last name.",
-                  )}
+                  label="First name"
+                  error={
+                    tried && !isFilledText(form.firstName)
+                      ? "Enter the first name."
+                      : ""
+                  }
                 >
                   <input
-                    value={form.name}
-                    onChange={(event) => set("name", event.target.value)}
+                    value={form.firstName}
+                    onChange={(event) => set("firstName", event.target.value)}
+                    className={fieldClass}
+                  />
+                </Field>
+                <Field
+                  label="Last name"
+                  error={
+                    tried && !isFilledText(form.lastName)
+                      ? "Enter the last name."
+                      : ""
+                  }
+                >
+                  <input
+                    value={form.lastName}
+                    onChange={(event) => set("lastName", event.target.value)}
                     className={fieldClass}
                   />
                 </Field>
@@ -318,7 +363,16 @@ export default function RegisterPage() {
                     <option value="OTHER">Other</option>
                   </select>
                 </Field>
-                <Field label="Year of birth" error={yearMessage(form.year)}>
+                <Field
+                  label="Year of birth"
+                  error={
+                    tried
+                      ? form.year.trim()
+                        ? yearMessage(form.year)
+                        : "Enter a four-digit year."
+                      : yearMessage(form.year)
+                  }
+                >
                   <input
                     inputMode="numeric"
                     value={form.year}
@@ -326,7 +380,17 @@ export default function RegisterPage() {
                     className={fieldClass}
                   />
                 </Field>
-                <Field label="Phone" error={phoneMessage(form.phone)}>
+                <Field
+                  label="Phone"
+                  error={
+                    serverErrors.phone ||
+                    (tried
+                      ? form.phone.trim()
+                        ? phoneMessage(form.phone)
+                        : "Enter a valid Nigerian phone number, such as 08031234567."
+                      : phoneMessage(form.phone))
+                  }
+                >
                   <input
                     value={form.phone}
                     onChange={(event) => set("phone", event.target.value)}
@@ -371,7 +435,13 @@ export default function RegisterPage() {
                     className={fieldClass}
                   />
                 </Field>
-                <Field label="Phone" error={phoneMessage(form.kinPhone)}>
+                <Field
+                  label="Phone"
+                  error={
+                    serverErrors["nextOfKin.phone"] ||
+                    phoneMessage(form.kinPhone)
+                  }
+                >
                   <input
                     value={form.kinPhone}
                     onChange={(event) => set("kinPhone", event.target.value)}
@@ -397,7 +467,11 @@ export default function RegisterPage() {
                 </Field>
                 <Field
                   label="Community"
-                  error={requiredText(form.community, "Enter the community.")}
+                  error={
+                    tried && !isFilledText(form.community)
+                      ? "Enter the community."
+                      : ""
+                  }
                 >
                   <input
                     value={form.community}
@@ -440,7 +514,13 @@ export default function RegisterPage() {
                 </Field>
                 <Field
                   label="Years fishing"
-                  error={yearsMessage(form.yearsFishing)}
+                  error={
+                    tried
+                      ? form.yearsFishing.trim()
+                        ? yearsMessage(form.yearsFishing)
+                        : "Enter the years fishing, from 0 to 80."
+                      : yearsMessage(form.yearsFishing)
+                  }
                 >
                   <input
                     inputMode="numeric"
@@ -527,12 +607,12 @@ export default function RegisterPage() {
                 </Field>
               </div>
             </Panel>
-            <button type="submit" disabled={!canSave} className={submitClass}>
+            <button type="submit" disabled={busy} className={submitClass}>
               {busy ? "Saving" : "Save registration"}
             </button>
           </form>
         </Modal>
       ) : null}
-    </div>
+    </>
   );
 }

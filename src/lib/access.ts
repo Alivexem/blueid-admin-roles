@@ -11,12 +11,7 @@ const ITEMS: {
   {
     href: "/dashboard/fishermen",
     label: "Fishermen",
-    anyOf: ["fisherman:read"],
-  },
-  {
-    href: "/dashboard/register",
-    label: "Registration",
-    anyOf: ["fisherman:create"],
+    anyOf: ["fisherman:read", "fisherman:create"],
   },
   {
     href: "/dashboard/verify",

@@ -137,18 +137,18 @@ export function VerifyPanel() {
           onChange={(event) => setScan(event.target.value.trim())}
           aria-label="Scanned card"
           placeholder="Paste a scanned card"
-          className="h-11 w-full rounded-[8px] border border-line bg-white px-3 text-base text-navy outline-none focus:border-navy"
+          className="h-11 w-full min-w-0 flex-1 rounded-[8px] border border-line bg-white px-3 text-base text-navy outline-none focus:border-navy"
         />
         <button
           type="submit"
           disabled={scan.trim().length < 8}
-          className="h-11 border border-navy px-5 text-sm text-navy disabled:opacity-40"
+          className="h-11 shrink-0 border border-navy px-5 text-sm text-navy disabled:opacity-40"
         >
           Scan
         </button>
         <button
           type="button"
-          className="h-11 border border-line px-5 text-sm text-navy"
+          className="h-11 shrink-0 border border-line px-5 text-sm whitespace-nowrap text-navy"
           onClick={() => {
             const id = stripSpace(value).toUpperCase();
             if (id.length < 4) return;

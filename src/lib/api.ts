@@ -53,7 +53,7 @@ export type SessionProfile = Operator & {
   roleId: RoleId;
 };
 
-type Detail = { message?: string; path?: string } | string;
+type Detail = { message?: string; path?: string; field?: string } | string;
 
 function detailList(details: unknown): Detail[] {
   if (Array.isArray(details)) return details as Detail[];
@@ -331,6 +331,11 @@ export function describeError(error: unknown) {
       return "Not found, or outside your area.";
     case "PHOTO_REQUIRED":
       return "Add a photograph before verification.";
+    case "NOT_VERIFIED":
+      return (
+        error.message ||
+        "Verify this record to make it active. A Blue ID is issued only then."
+      );
     case "DUPLICATE_REVIEW_PENDING":
       return "Resolve the open duplicate review before verification.";
     case "DEVICE_REQUIRED":
@@ -356,7 +361,7 @@ export function describeError(error: unknown) {
       return "That value is already used.";
     case "WEAK_PASSWORD":
     case "VALIDATION_ERROR":
-      return reasons.join(" ") || error.message;
+      return [...new Set(reasons)].join(" ") || error.message;
     case "SESSION_ENDED":
     case "SESSION_REVOKED":
     case "REFRESH_TOKEN_INVALID":
@@ -656,8 +661,29 @@ export type DuplicateFlagRow = {
   resolution?: string;
 };
 
+type FishermanEnvelope = FishermanRow & {
+  _id?: string;
+  fisherman?: FishermanRow;
+};
+
+function fishermanFrom(value: unknown): FishermanRow {
+  const record = (
+    value && typeof value === "object" ? value : {}
+  ) as FishermanEnvelope;
+  const source = record.fisherman ?? record;
+  const raw = source.id || record._id || source._id;
+  const id =
+    typeof raw === "string"
+      ? raw
+      : raw && typeof raw === "object" && "$oid" in raw
+        ? String((raw as { $oid?: string }).$oid ?? "")
+        : "";
+  return { ...source, id };
+}
+
 export type FishermanRow = {
   id: string;
+  _id?: string;
   blueId?: string;
   tempReference?: string;
   fullName?: string;
@@ -679,14 +705,22 @@ export async function listFishermen(query?: {
   status?: string;
   flagged?: boolean;
 }) {
-  return api<FishermanRow[]>("GET", "/fishermen", {
+  const result = await api<FishermanRow[]>("GET", "/fishermen", {
     query: { limit: 50, ...query },
   });
+  return {
+    ...result,
+    data: (Array.isArray(result.data) ? result.data : []).map(fishermanFrom),
+  };
 }
 
 export async function createFisherman(body: Record<string, unknown>) {
-  const { data } = await api<FishermanRow>("POST", "/fishermen", { body });
-  return data;
+  const { data } = await api<{ fisherman?: FishermanRow } | FishermanRow>(
+    "POST",
+    "/fishermen",
+    { body },
+  );
+  return fishermanFrom(data);
 }
 
 export async function uploadFishermanPhoto(id: string, file: File) {
@@ -974,7 +1008,7 @@ export async function entityAudit(entityType: string, entityId: string) {
 
 export async function getFisherman(id: string) {
   const { data } = await api<FishermanRow>("GET", `/fishermen/${id}`);
-  return data;
+  return fishermanFrom(data);
 }
 
 export async function updateFisherman(
@@ -984,7 +1018,11 @@ export async function updateFisherman(
   const { data } = await api<FishermanRow>("PATCH", `/fishermen/${id}`, {
     body,
   });
-  return data;
+  return fishermanFrom(data);
+}
+
+export async function withdrawFisherman(id: string, reason: string) {
+  await api("DELETE", `/fishermen/${id}`, { body: { reason } });
 }
 
 export async function setFishermanStatus(
@@ -1018,10 +1056,11 @@ export async function fishermanQr(id: string) {
 }
 
 export async function checkDuplicates(body: Record<string, unknown>) {
-  const { data } = await api<unknown>("POST", "/fishermen/check-duplicates", {
-    body,
-  });
-  return data;
+  const { data } = await api<
+    { matches?: { fullName?: string; blueId?: string | null }[] } | unknown[]
+  >("POST", "/fishermen/check-duplicates", { body });
+  if (Array.isArray(data)) return data;
+  return data?.matches ?? [];
 }
 
 export async function ownerAssets(ownerId: string) {

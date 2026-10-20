@@ -39,10 +39,17 @@ export function phoneMessage(value: string) {
   const text = value.trim();
   if (!text) return "";
   const digits = text.replace(/\D/g, "");
-  if (digits.length < 10 || digits.length > 11) {
-    return "Enter a phone number with 10 or 11 digits.";
+  const local = digits.startsWith("234") ? `0${digits.slice(3)}` : digits;
+  if (!/^0[789]\d{9}$/.test(local)) {
+    return "Enter a valid Nigerian phone number, such as 08031234567.";
   }
   return "";
+}
+
+export function nigerianPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  const local = digits.startsWith("234") ? `0${digits.slice(3)}` : digits;
+  return /^0[789]\d{9}$/.test(local) ? local : "";
 }
 
 export function isPhone(value: string) {

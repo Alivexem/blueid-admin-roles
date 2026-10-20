@@ -38,12 +38,7 @@ export const NAV: { href: string; label: string; roles: RoleId[] }[] = [
   {
     href: "/dashboard/fishermen",
     label: "Fishermen",
-    roles: ["state", "fisheries", "lga", "cooperative"],
-  },
-  {
-    href: "/dashboard/register",
-    label: "Registration",
-    roles: ["state", "fisheries", "lga", "enumerator"],
+    roles: ["state", "fisheries", "lga", "enumerator", "cooperative"],
   },
   {
     href: "/dashboard/verify",

@@ -1274,6 +1274,13 @@ export async function dashboardProgrammeStats() {
   return data;
 }
 
+export async function dashboardCommunities() {
+  const { data } = await api<unknown>("GET", "/dashboard/communities", {
+    query: { limit: 12 },
+  });
+  return data;
+}
+
 export async function gisCommunities() {
   const { data } = await api<{
     features?: {

@@ -214,9 +214,7 @@ export default function FishermanPage() {
                               "Verified. A Blue ID has been issued.",
                             ),
                           )
-                          .catch((reason) =>
-                            toast.error(describeError(reason)),
-                          )
+                          .catch((reason) => toast.error(describeError(reason)))
                           .finally(() => setBusy(false));
                       },
                     }

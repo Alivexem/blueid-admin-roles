@@ -428,9 +428,7 @@ function AssetMenu({
       label={`Actions for ${label}`}
       items={[
         ...(canManage ? [{ label: "Edit", onSelect: onEdit }] : []),
-        ...(canTransfer
-          ? [{ label: "Transfer", onSelect: onTransfer }]
-          : []),
+        ...(canTransfer ? [{ label: "Transfer", onSelect: onTransfer }] : []),
         ...(canManage
           ? [{ label: "Withdraw", onSelect: onWithdraw, danger: true }]
           : []),

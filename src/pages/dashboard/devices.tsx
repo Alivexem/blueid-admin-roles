@@ -138,7 +138,9 @@ export default function DevicesPage() {
                                 onSelect: () => {
                                   void revokeDevice(device.id)
                                     .then(() => load())
-                                    .then(() => toast.success("Device revoked."))
+                                    .then(() =>
+                                      toast.success("Device revoked."),
+                                    )
                                     .catch((reason) =>
                                       toast.error(describeError(reason)),
                                     );

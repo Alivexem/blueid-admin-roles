@@ -500,15 +500,27 @@ export async function setUserStatus(
 export type AuditRow = {
   id: string;
   action: string;
-  actor?: { fullName?: string; email?: string; role?: string };
-  entity?: { type?: string; id?: string; label?: string };
+  actor?: {
+    fullName?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+    service?: string;
+    user?: { firstName?: string; lastName?: string };
+  };
+  entity?: { type?: string; id?: string; label?: string; blueId?: string };
+  changes?: { field?: string; from?: unknown; to?: unknown }[];
+  metadata?: { reason?: string; event?: string; sessionsRevoked?: number };
   outcome?: string;
   failureReason?: string;
   createdAt?: string;
 };
 
 export async function listAudit(page = 1) {
-  return api<AuditRow[]>("GET", "/audit", { query: { page, limit: 50 } });
+  const result = await api<AuditRow[]>("GET", "/audit", {
+    query: { page, limit: 50 },
+  });
+  return { ...result, data: rowsWithId(result.data) };
 }
 
 export async function dashboardSummary() {

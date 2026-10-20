@@ -8,6 +8,7 @@ import {
   Panel,
   TableSkeleton,
 } from "@/components/dashboard/ui";
+import { auditLines } from "@/lib/audit-copy";
 import { describeError, listAudit, type AuditRow } from "@/lib/api";
 
 function when(value?: string) {
@@ -66,27 +67,29 @@ export default function AuditPage() {
               />
             </li>
           ) : null}
-          {rows.map((entry) => (
-            <li
-              key={entry.id}
-              className="grid gap-1 px-5 py-4 text-sm sm:grid-cols-[180px_1fr]"
-            >
-              <p className="text-muted-foreground">{when(entry.createdAt)}</p>
-              <div>
-                <p className="text-navy">
-                  {entry.actor?.fullName || "Officer"}
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {entry.action}
-                  </span>
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {entry.entity?.label || entry.entity?.type || entry.outcome}
-                  {entry.failureReason ? ` · ${entry.failureReason}` : ""}
-                </p>
-              </div>
-            </li>
-          ))}
+          {rows.map((entry) => {
+            const line = auditLines(entry);
+            return (
+              <li
+                key={entry.id}
+                className="grid gap-1 px-5 py-4 text-sm sm:grid-cols-[180px_1fr]"
+              >
+                <p className="text-muted-foreground">{when(entry.createdAt)}</p>
+                <div>
+                  <p className="text-navy">
+                    {line.who}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {line.what}
+                    </span>
+                  </p>
+                  {line.detail ? (
+                    <p className="mt-1 text-muted-foreground">{line.detail}</p>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </Panel>
     </div>

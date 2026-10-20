@@ -15,7 +15,12 @@ import {
   YAxis,
 } from "recharts";
 
-import { PageHeading, Panel, StatCard, StatSkeleton } from "@/components/dashboard/ui";
+import {
+  PageHeading,
+  Panel,
+  StatCard,
+  StatSkeleton,
+} from "@/components/dashboard/ui";
 import {
   dashboardCapacity,
   dashboardCommunities,
@@ -30,14 +35,28 @@ import {
   toRoleId,
   type AuditRow,
 } from "@/lib/api";
+import { auditLines } from "@/lib/audit-copy";
 import { roleMeta, ROLES, type RoleId } from "@/lib/dashboard";
 import { useSessionStore } from "@/store/useSessionStore";
 
-const COLORS = ["#0A4C9A", "#1F6FBF", "#5B93D6", "#0E2F66", "#8C6A2F", "#3E7A4A"];
+const COLORS = [
+  "#0A4C9A",
+  "#1F6FBF",
+  "#5B93D6",
+  "#0E2F66",
+  "#8C6A2F",
+  "#3E7A4A",
+];
 
 const HEADLINES: { label: string; keys: string[] }[] = [
-  { label: "Fishermen", keys: ["totalRegistered", "registeredFishermen", "fishermen"] },
-  { label: "Verified", keys: ["verified", "verifiedFishermen", "verifiedCount"] },
+  {
+    label: "Fishermen",
+    keys: ["totalRegistered", "registeredFishermen", "fishermen"],
+  },
+  {
+    label: "Verified",
+    keys: ["verified", "verifiedFishermen", "verifiedCount"],
+  },
   {
     label: "Awaiting verification",
     keys: ["pendingVerification", "awaitingVerification", "pending"],
@@ -58,16 +77,6 @@ const HEADLINES: { label: string; keys: string[] }[] = [
   },
 ];
 
-const ACTIONS: Record<string, string> = {
-  LOGIN: "Signed in",
-  LOGOUT: "Signed out",
-  STATUS_CHANGE: "Changed a status",
-  CREATE: "Added a record",
-  UPDATE: "Updated a record",
-  DELETE: "Withdrew a record",
-  VERIFY: "Verified a record",
-};
-
 type Slice = { name: string; value: number };
 type Bars = { name: string; registered: number; verified: number };
 type ProgrammeLine = { name: string; allocated: number; delivered: number };
@@ -79,7 +88,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function asRows(value: unknown): Record<string, unknown>[] {
   if (Array.isArray(value)) return value.filter(isRecord);
   if (!isRecord(value)) return [];
-  for (const key of ["items", "rows", "series", "points", "communities", "lgas"]) {
+  for (const key of [
+    "items",
+    "rows",
+    "series",
+    "points",
+    "communities",
+    "lgas",
+  ]) {
     if (Array.isArray(value[key])) return asRows(value[key]);
   }
   return [];
@@ -129,7 +145,9 @@ function breakdown(source: unknown): Slice[] {
     const value = source[key];
     if (!isRecord(value)) continue;
     const slices = Object.entries(value)
-      .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+      .filter(
+        (entry): entry is [string, number] => typeof entry[1] === "number",
+      )
       .map(([name, count]) => ({ name: titleCase(name), value: count }));
     if (slices.length > 1) return slices;
   }
@@ -159,7 +177,13 @@ function barsFrom(value: unknown, nameKeys: string[]): Bars[] {
       const name = raw.length === 3 ? lgaName(raw) : titleCase(raw);
       return {
         name: name || "—",
-        registered: numberOf(row, ["registered", "count", "total", "fishermen", "created"]),
+        registered: numberOf(row, [
+          "registered",
+          "count",
+          "total",
+          "fishermen",
+          "created",
+        ]),
         verified: numberOf(row, ["verified", "verifiedCount"]),
       };
     })
@@ -198,23 +222,11 @@ function gapsFrom(value: unknown) {
   return rows.slice(0, 6);
 }
 
-function plainAction(action?: string) {
-  if (!action) return "Recorded an action";
-  return ACTIONS[action] ?? titleCase(action);
-}
-
-function plainSubject(entry: AuditRow) {
-  const label = entry.entity?.label || "";
-  if (!label || /^(GET|POST|PATCH|PUT|DELETE)\b/i.test(label) || label.startsWith("/")) {
-    return entry.actor?.fullName || "An officer";
-  }
-  return label;
-}
-
 export function ApiOverview() {
   const profile = useSessionStore((state) => state.profile);
   const role = profile?.roleId ?? "state";
-  const canAudit = profile?.permissions?.granted?.includes("audit:read") ?? false;
+  const canAudit =
+    profile?.permissions?.granted?.includes("audit:read") ?? false;
   const [cards, setCards] = useState<{ label: string; value: number }[]>([]);
   const [pie, setPie] = useState<Slice[]>([]);
   const [bars, setBars] = useState<Bars[]>([]);
@@ -255,69 +267,94 @@ export function ApiOverview() {
             .catch(() => [])
         : Promise.resolve([]),
     ])
-      .then(([summary, trend, capacity, communities, programmeRows, gapRows, activity, accounts]) => {
-        if (!live) return;
-        const nextCards = HEADLINES.flatMap((item) => {
-          const value = readNumber(summary, item.keys);
-          return value === null ? [] : [{ label: item.label, value }];
-        });
-        if (nextCards.length === 0 && isRecord(summary)) {
-          const skip = new Set([
-            "page",
-            "limit",
-            "totalPages",
-            "requestId",
-            "hasNextPage",
-            "hasPrevPage",
-          ]);
-          for (const [key, value] of Object.entries(summary)) {
-            if (skip.has(key)) continue;
-            if (typeof value === "number") {
-              nextCards.push({ label: titleCase(key), value });
-            } else if (isRecord(value) && typeof value.total === "number") {
-              nextCards.push({ label: titleCase(key), value: value.total });
+      .then(
+        ([
+          summary,
+          trend,
+          capacity,
+          communities,
+          programmeRows,
+          gapRows,
+          activity,
+          accounts,
+        ]) => {
+          if (!live) return;
+          const nextCards = HEADLINES.flatMap((item) => {
+            const value = readNumber(summary, item.keys);
+            return value === null ? [] : [{ label: item.label, value }];
+          });
+          if (nextCards.length === 0 && isRecord(summary)) {
+            const skip = new Set([
+              "page",
+              "limit",
+              "totalPages",
+              "requestId",
+              "hasNextPage",
+              "hasPrevPage",
+            ]);
+            for (const [key, value] of Object.entries(summary)) {
+              if (skip.has(key)) continue;
+              if (typeof value === "number") {
+                nextCards.push({ label: titleCase(key), value });
+              } else if (isRecord(value) && typeof value.total === "number") {
+                nextCards.push({ label: titleCase(key), value: value.total });
+              }
             }
           }
-        }
-        setCards(nextCards.slice(0, 8));
-        const slices = breakdown(summary);
-        setPie(
-          slices.length
-            ? slices
-            : nextCards
-                .filter((item) =>
-                  ["Verified", "Awaiting verification", "Under review"].includes(item.label),
-                )
-                .map((item) => ({ name: item.label, value: item.value })),
-        );
-        const trendBars = barsFrom(trend, ["period", "label", "month", "date", "bucket"]);
-        const capacityBars = barsFrom(capacity, ["lga", "name", "code"]);
-        const communityBars = barsFrom(communities, ["name", "community", "communityName"]);
-        if (trendBars.length) {
-          setBars(trendBars);
-          setBarTitle("Registrations");
-        } else if (capacityBars.length) {
-          setBars(capacityBars);
-          setBarTitle("Fishermen by local government");
-        } else {
-          setBars(communityBars);
-          setBarTitle("Fishermen by community");
-        }
-        setProgrammes(programmesFrom(programmeRows));
-        setGaps(gapsFrom(gapRows));
-        setAudit(activity);
-        const counts = new Map<RoleId, number>();
-        for (const account of accounts) {
-          const id = toRoleId(account.role);
-          counts.set(id, (counts.get(id) ?? 0) + 1);
-        }
-        setOfficers(
-          ROLES.filter((item) => counts.has(item.id)).map((item) => ({
-            name: item.label,
-            value: counts.get(item.id) ?? 0,
-          })),
-        );
-      })
+          setCards(nextCards.slice(0, 8));
+          const slices = breakdown(summary);
+          setPie(
+            slices.length
+              ? slices
+              : nextCards
+                  .filter((item) =>
+                    [
+                      "Verified",
+                      "Awaiting verification",
+                      "Under review",
+                    ].includes(item.label),
+                  )
+                  .map((item) => ({ name: item.label, value: item.value })),
+          );
+          const trendBars = barsFrom(trend, [
+            "period",
+            "label",
+            "month",
+            "date",
+            "bucket",
+          ]);
+          const capacityBars = barsFrom(capacity, ["lga", "name", "code"]);
+          const communityBars = barsFrom(communities, [
+            "name",
+            "community",
+            "communityName",
+          ]);
+          if (trendBars.length) {
+            setBars(trendBars);
+            setBarTitle("Registrations");
+          } else if (capacityBars.length) {
+            setBars(capacityBars);
+            setBarTitle("Fishermen by local government");
+          } else {
+            setBars(communityBars);
+            setBarTitle("Fishermen by community");
+          }
+          setProgrammes(programmesFrom(programmeRows));
+          setGaps(gapsFrom(gapRows));
+          setAudit(activity);
+          const counts = new Map<RoleId, number>();
+          for (const account of accounts) {
+            const id = toRoleId(account.role);
+            counts.set(id, (counts.get(id) ?? 0) + 1);
+          }
+          setOfficers(
+            ROLES.filter((item) => counts.has(item.id)).map((item) => ({
+              name: item.label,
+              value: counts.get(item.id) ?? 0,
+            })),
+          );
+        },
+      )
       .finally(() => {
         if (live) setLoading(false);
       });
@@ -339,17 +376,17 @@ export function ApiOverview() {
       />
       {error ? <p className="text-sm text-[#8C2F2F]">{error}</p> : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {loading
-          ? Array.from({ length: 4 }, (_, index) => <StatSkeleton key={index} />)
-          : cards.length
-            ? cards.map((item) => (
-                <StatCard key={item.label} label={item.label} value={item.value} />
-              ))
-            : (
-                <p className="text-sm text-muted-foreground sm:col-span-2">
-                  The register has not returned summary figures yet.
-                </p>
-              )}
+        {loading ? (
+          Array.from({ length: 4 }, (_, index) => <StatSkeleton key={index} />)
+        ) : cards.length ? (
+          cards.map((item) => (
+            <StatCard key={item.label} label={item.label} value={item.value} />
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground sm:col-span-2">
+            The register has not returned summary figures yet.
+          </p>
+        )}
       </div>
       <div className="grid gap-3 lg:grid-cols-5">
         <section className="rounded-[8px] border border-line bg-white lg:col-span-3">
@@ -358,16 +395,38 @@ export function ApiOverview() {
           </h2>
           <div className="h-72 px-2 py-4">
             {!ready || loading ? null : bars.length === 0 ? (
-              <p className="px-3 text-sm text-muted-foreground">No series to chart yet.</p>
+              <p className="px-3 text-sm text-muted-foreground">
+                No series to chart yet.
+              </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={bars} margin={{ left: 0, right: 8, top: 8 }}>
                   <CartesianGrid stroke="#e6eef8" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fill: "#5c6b82", fontSize: 11 }} interval={0} angle={bars.length > 6 ? -30 : 0} height={bars.length > 6 ? 60 : 30} />
-                  <YAxis allowDecimals={false} tick={{ fill: "#5c6b82", fontSize: 11 }} width={32} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: "#5c6b82", fontSize: 11 }}
+                    interval={0}
+                    angle={bars.length > 6 ? -30 : 0}
+                    height={bars.length > 6 ? 60 : 30}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fill: "#5c6b82", fontSize: 11 }}
+                    width={32}
+                  />
                   <Tooltip />
-                  <Bar dataKey="registered" name="Registered" fill="#0A4C9A" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="verified" name="Verified" fill="#8fb4e8" radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="registered"
+                    name="Registered"
+                    fill="#0A4C9A"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="verified"
+                    name="Verified"
+                    fill="#8fb4e8"
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -378,8 +437,13 @@ export function ApiOverview() {
             {role === "super" && officers.length ? "Officers" : "Register mix"}
           </h2>
           <div className="h-72 px-2 py-4">
-            {!ready || loading ? null : (role === "super" && officers.length ? officers : pie).length === 0 ? (
-              <p className="px-3 text-sm text-muted-foreground">No mix to chart yet.</p>
+            {!ready || loading ? null : (role === "super" && officers.length
+                ? officers
+                : pie
+              ).length === 0 ? (
+              <p className="px-3 text-sm text-muted-foreground">
+                No mix to chart yet.
+              </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -391,9 +455,14 @@ export function ApiOverview() {
                     outerRadius={84}
                     paddingAngle={2}
                   >
-                    {(role === "super" && officers.length ? officers : pie).map((slice, index) => (
-                      <Cell key={slice.name} fill={COLORS[index % COLORS.length]} />
-                    ))}
+                    {(role === "super" && officers.length ? officers : pie).map(
+                      (slice, index) => (
+                        <Cell
+                          key={slice.name}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ),
+                    )}
                   </Pie>
                   <Tooltip />
                 </PieChart>
@@ -405,7 +474,9 @@ export function ApiOverview() {
       <div className="grid gap-3 lg:grid-cols-2">
         <Panel title="Programmes">
           {programmes.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">No programme totals yet.</p>
+            <p className="px-5 py-4 text-sm text-muted-foreground">
+              No programme totals yet.
+            </p>
           ) : (
             <ul>
               {programmes.map((item) => (
@@ -430,7 +501,9 @@ export function ApiOverview() {
         </Panel>
         <Panel title="Communities still short of facilities">
           {gaps.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">No facility gaps were returned.</p>
+            <p className="px-5 py-4 text-sm text-muted-foreground">
+              No facility gaps were returned.
+            </p>
           ) : (
             <ul>
               {gaps.map((item) => (
@@ -455,21 +528,33 @@ export function ApiOverview() {
       {canAudit ? (
         <Panel title="Recent activity">
           {audit.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">No recent activity.</p>
+            <p className="px-5 py-4 text-sm text-muted-foreground">
+              No recent activity.
+            </p>
           ) : (
             <ul>
-              {audit.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="border-t border-line px-5 py-3 text-sm first:border-t-0"
-                >
-                  <p className="text-navy">
-                    {entry.actor?.fullName || "An officer"}
-                    <span className="text-muted-foreground"> · {plainAction(entry.action)}</span>
-                  </p>
-                  <p className="mt-1 text-muted-foreground">{plainSubject(entry)}</p>
-                </li>
-              ))}
+              {audit.map((entry) => {
+                const line = auditLines(entry);
+                return (
+                  <li
+                    key={entry.id}
+                    className="border-t border-line px-5 py-3 text-sm first:border-t-0"
+                  >
+                    <p className="text-navy">
+                      {line.who}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {line.what}
+                      </span>
+                    </p>
+                    {line.detail ? (
+                      <p className="mt-1 text-muted-foreground">
+                        {line.detail}
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
           <Link

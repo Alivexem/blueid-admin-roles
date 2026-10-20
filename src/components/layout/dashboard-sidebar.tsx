@@ -98,11 +98,21 @@ export function DashboardSidebar({
     >
       <div
         className={cn(
-          "flex items-start gap-2 px-4 py-5",
-          collapsed ? "flex-col items-center" : "justify-between",
+          "flex gap-2",
+          onClose
+            ? "items-center justify-between py-4 pr-4 pl-5"
+            : collapsed
+              ? "flex-col items-center px-4 py-5"
+              : "items-start justify-between px-4 py-5",
         )}
       >
-        <Logo compact={collapsed} />
+        {onClose ? (
+          <p className="text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
+            {meta.label}
+          </p>
+        ) : (
+          <Logo compact={collapsed} />
+        )}
         <div className="flex items-center gap-1">
           {onToggle ? (
             <button
@@ -130,7 +140,7 @@ export function DashboardSidebar({
           ) : null}
         </div>
       </div>
-      {collapsed ? null : (
+      {collapsed || onClose ? null : (
         <p className="px-5 pb-4 text-[11px] tracking-[0.16em] text-muted-foreground uppercase">
           {meta.label}
         </p>
